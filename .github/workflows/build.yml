@@ -13,9 +13,9 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           architecture: x64
@@ -29,11 +29,26 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: ./packaging/build_windows.ps1
+        run: |
+          $failed = $false
+          try { ./packaging/build_windows.ps1 *>&1 | Tee-Object -FilePath build.log }
+          catch { "ERROR: $_" | Tee-Object -FilePath build.log -Append; $failed = $true }
+          if ($failed) {
+            # the log tail as an annotation, readable through the API
+            $t = (Get-Content build.log -Tail 60) -join "%0A"
+            Write-Host "::error title=Build failed::$t"
+            exit 1
+          }
 
       - name: Install, start and uninstall
         shell: pwsh
         run: |
+          trap {
+            $t = ((Get-Content test.log -Tail 40 -ErrorAction SilentlyContinue) + "ERROR: $_") -join "%0A"
+            Write-Host "::error title=Install test failed::$t"
+            exit 1
+          }
+          Start-Transcript test.log | Out-Null
           $setup = (Get-ChildItem dist\UbiClipper-Setup-*.exe).FullName
           Start-Process $setup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /LOG=install.log" -Wait
           $app = "$env:LOCALAPPDATA\Programs\UbiClipper"
@@ -65,8 +80,9 @@ jobs:
           Start-Sleep 5
           if (Test-Path "$app\python") { throw "uninstall left files behind" }
           Write-Host "Install / start / uninstall OK"
+          Stop-Transcript | Out-Null
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: ubiclipper-windows
@@ -75,6 +91,8 @@ jobs:
             dist/*.zip
             shots/
             install.log
+            build.log
+            test.log
           if-no-files-found: warn
 
       - name: Release

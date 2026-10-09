@@ -1,4 +1,4 @@
-# UbiClipper v1.7
+# UbiClipper v1.8
 
 Pick a video (6 minutes to 6+ hours), let it find the moments where something
 happens — laughter, screams, sudden outbursts, loud reactions — and get
@@ -7,21 +7,44 @@ with your webcam on top, and Turkish (or other language) subtitles burned in,
 coloured per person when several people talk. Then post them to TikTok,
 Instagram Reels and YouTube Shorts in one click.
 
-## Setup
+## Install (Windows 10/11, 64-bit)
 
-1. Install **Python 3.10+** (on Windows, tick "Add Python to PATH").
-2. Install **FFmpeg** and make sure `ffmpeg` and `ffprobe` work in a terminal.
-   - Windows: `winget install Gyan.FFmpeg`
-   - macOS: `brew install ffmpeg`
-3. Double-click **`run_windows.bat`**. It installs everything (plus the NVIDIA
-   CUDA libraries if you have an NVIDIA card, ~1 GB once), downloads the AI
-   models once (~6 GB: speech-to-text, listening AI, voice model, AI judge;
-   `python get_models.py` does the same by hand) and opens the app.
-4. Something not working? Double-click **`check_setup.bat`** and send the output.
+Download from **[Releases](https://github.com/uberbora/UbiClipper/releases/latest)**:
+
+- **UbiClipper-Setup-x.y.z.exe**: the normal installer. No admin rights
+  needed; Start menu + desktop shortcut and an uninstaller. Until the app is
+  code-signed, Windows says "Windows protected your PC": click
+  **More info → Run anyway**.
+- **UbiClipper-x.y.z-portable.zip**: the same app without installing. Unzip
+  it anywhere and double-click **Start UbiClipper.bat**. Use this if
+  *Smart App Control* blocks the installer.
+
+Python, FFmpeg and everything else are included. On the first start the
+**Get UbiClipper ready** window downloads the AI models once (about 6 GB with
+the AI judge) and, on PCs with an NVIDIA card, the GPU speed-up (about 1.2 GB,
+straight from NVIDIA's official packages). Everything after that works
+offline. Open it again any time: **Settings → All AI downloads & GPU
+speed-up…**
+
+Settings, the AI models and your word fixes live in
+`%USERPROFILE%\.ubiclipper`, so updates never touch them. Uninstalling asks
+whether to delete them too. Something not working? **Settings → Check setup**
+and send the output (the log is in `%USERPROFILE%\.ubiclipper\logs`).
+
+### Run from source (developers)
+
+1. Install **Python 3.10+** (tick "Add Python to PATH") and **FFmpeg**
+   (`winget install Gyan.FFmpeg`, macOS: `brew install ffmpeg`).
+2. Double-click **`run_windows.bat`** (installs the packages, the NVIDIA
+   libraries on NVIDIA PCs and the models, then opens the app), or
+   `pip install -r requirements.txt` and `python app.py`.
+3. Build the installer yourself: `packaging\build_windows.ps1` (needs
+   Inno Setup 6). GitHub Actions does the same for every `v*` tag and
+   publishes the result as a release.
 
 ## Use it
 
-**App:** double-click `run_windows.bat` (or `python app.py`).
+**App:** start UbiClipper from the Start menu (from source: `run_windows.bat`).
 Select a video **or paste a VOD link** (or just **drag a video file or a link
 onto the window**) → Analyze → untick moments you don't want (double-click to
 preview) → Export checked clips.
@@ -122,7 +145,7 @@ into short 1-3 word captions, TikTok/Reels style.
   is much faster but makes more mistakes; `large-v3` is a bit more accurate
   but several times slower.
 - **NVIDIA GPU** is used automatically when the CUDA libraries are installed
-  (`run_windows.bat` does that, or run `install_gpu.bat`). Otherwise it runs
+  (the GPU speed-up in the Get ready window; from source `install_gpu.bat`). Otherwise it runs
   on CPU — slower, but only the clips are transcribed, never the whole stream.
   The progress bar shows `transcribing (GPU)` or `(CPU)`.
 - **Names / words to recognise:** put your name, friends' names, game names,
@@ -295,7 +318,7 @@ platform you post to.
 ### AI (free, runs on your PC, nothing to install)
 
 Two optional AIs in the Moments tab. Both run locally with engines that
-`run_windows.bat` already installs for subtitles (onnxruntime and
+UbiClipper already ships for subtitles (onnxruntime and
 CTranslate2), so there is no extra program, no account, no API key, and
 nothing is sent anywhere. Models download once into `~/.ubiclipper/models`.
 
@@ -368,12 +391,13 @@ v0.3 it skips PyAV when Windows blocks it. If subtitles still fail, run
 `check_setup.bat`; it shows exactly which part won't load.
 
 **Subtitles are on CPU even though I have an NVIDIA GPU**
-Run `install_gpu.bat`; it installs CUDA 12 + cuDNN 9 from NVIDIA's pip
-packages and re-runs the check.
+Open **Settings → All AI downloads & GPU speed-up…** and download the GPU
+speed-up (CUDA 12 + cuDNN 9 from NVIDIA's official packages). From source:
+`install_gpu.bat`.
 
 **AI judge: "too old for this model" or it runs on CPU**
-Start with `run_windows.bat` once: it updates CTranslate2 (4.6.2+ is needed
-for Qwen3). If the GPU runs out of memory (other games/apps open), the judge
+Install the latest UbiClipper (from source: run `run_windows.bat` once); it
+needs CTranslate2 4.6.2+ for Qwen3. If the GPU runs out of memory (other games/apps open), the judge
 falls back to the CPU by itself; it's slower but gives the same answers.
 Analysis never fails because of an AI step: it's skipped with a note in the
 status bar.
@@ -415,7 +439,11 @@ check_setup.py   diagnoses installs, GPU, blocked DLLs
 region_picker.py drag-a-box window for the webcam / main area
 style_editor.py  subtitle style window with live preview
 ui_help.py       the ⓘ hover help texts
-corrections.txt  your own "misheard => correct" fixes (created on first use)
+ready_window.py  the "Get UbiClipper ready" downloads window
+clipper/getready.py   what gets downloaded after installing (models, NVIDIA libs)
+clipper/bootstrap.py  start-up fixes for the installed app (FFmpeg, no consoles, log)
+packaging/       Windows build: build_windows.ps1, Inno Setup script
+.github/workflows/build.yml  builds, test-installs and releases the installer
 ```
 
 ## Roadmap — where each planned feature plugs in

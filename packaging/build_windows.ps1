@@ -110,3 +110,4 @@ if (-not $NoInstaller) {
 }
 
 Get-ChildItem $Out -File | ForEach-Object { "{0,-45} {1,8:N0} MB" -f $_.Name, ($_.Length / 1MB) }
+exit 0
