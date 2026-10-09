@@ -20,6 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path clipper/__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -96,17 +103,19 @@ jobs:
             Write-Host "::notice title=Install test::$t"
           }
           if (-not (Test-Path shots)) { exit 0 }
-          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\s" | Out-Null
-          Copy-Item shots\*, test.log "$env:RUNNER_TEMP\s" -ErrorAction SilentlyContinue
+          # a separate worktree, so the build output here stays untouched
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
+          $wt = Join-Path $env:RUNNER_TEMP "shots-wt"
+          git worktree add -q --detach $wt
+          Push-Location $wt
           git checkout -q --orphan ci-shots
-          git rm -rq --cached .
-          Get-ChildItem -Force | Where-Object { $_.Name -ne ".git" } | Remove-Item -Recurse -Force
-          Copy-Item "$env:RUNNER_TEMP\s\*" .
+          git rm -rqf .
+          Copy-Item "$env:GITHUB_WORKSPACE\shots\*", "$env:GITHUB_WORKSPACE\test.log" . -ErrorAction SilentlyContinue
           git add -A
           git commit -qm "Screenshots of run $env:GITHUB_RUN_ID"
           git push -qf origin ci-shots
+          Pop-Location
 
       - uses: actions/upload-artifact@v5
         if: always()
@@ -120,13 +129,6 @@ jobs:
             build.log
             test.log
           if-no-files-found: warn
-
-      - name: Version
-        id: ver
-        shell: pwsh
-        run: |
-          $v = (Select-String -Path clipper/__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
-          "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release
