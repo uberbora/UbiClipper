@@ -1,0 +1,5 @@
+# Nice-to-have: the app works without these.
+# curl_cffi: looks like a real browser to Kick/Twitch bot protection (links, chat)
+# tkinterdnd2: drag & drop files and links onto the window
+curl_cffi
+tkinterdnd2

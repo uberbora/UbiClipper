@@ -1,0 +1,87 @@
+name: Build Windows installer
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Build
+        shell: pwsh
+        run: ./packaging/build_windows.ps1
+
+      - name: Install, start and uninstall
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist\UbiClipper-Setup-*.exe).FullName
+          Start-Process $setup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /CURRENTUSER /NORESTART /LOG=install.log" -Wait
+          $app = "$env:LOCALAPPDATA\Programs\UbiClipper"
+          if (-not (Test-Path "$app\python\pythonw.exe")) { Get-Content install.log -Tail 40; throw "not installed" }
+
+          & "$app\python\python.exe" "$app\check_setup.py"
+          if ($LASTEXITCODE) { throw "check_setup failed" }
+
+          & "$app\python\python.exe" "packaging\test_gpu_download.py"
+          if ($LASTEXITCODE) { throw "GPU download test failed" }
+
+          # the window opens and keeps running, the way the Start menu starts it
+          $p = Start-Process "$app\python\pythonw.exe" -ArgumentList "`"$app\app.py`"" -WorkingDirectory $app -PassThru
+          Start-Sleep 30
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $bmp.Save("shots\first_start.png")
+          $log = "$env:USERPROFILE\.ubiclipper\logs\ubiclipper.log"
+          if (Test-Path $log) { Get-Content $log }
+          if ($p.HasExited) { throw "UbiClipper closed by itself (exit $($p.ExitCode))" }
+          if ((Test-Path $log) -and (Select-String -Path $log -Pattern "Traceback" -Quiet)) { throw "errors in the log" }
+          Stop-Process $p.Id -Force
+          Start-Sleep 3
+
+          Start-Process "$app\unins000.exe" -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES" -Wait
+          Start-Sleep 5
+          if (Test-Path "$app\python") { throw "uninstall left files behind" }
+          Write-Host "Install / start / uninstall OK"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ubiclipper-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+            shots/
+            install.log
+          if-no-files-found: warn
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.zip
+          generate_release_notes: true

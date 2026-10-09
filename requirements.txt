@@ -1,0 +1,6 @@
+numpy>=1.24
+faster-whisper>=1.1.0
+yt-dlp
+onnxruntime>=1.14
+ctranslate2>=4.6.2
+tokenizers>=0.15

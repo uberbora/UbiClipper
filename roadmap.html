@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UbiClipper Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one column of phases, each a numbered stage with rows of features; summary strip on top. */
+:root {
+  --bg: #F6F5FA; --surface: #FFFFFF; --ink: #19171F; --muted: #625D70; --line: #E3E0EC;
+  --accent: #7C3AED; --accent-soft: #EEE7FD;
+  --done: #15803D; --done-soft: #E3F4E8; --next: #B45309; --next-soft: #FDF0DD;
+  --plan: #5B5670; --plan-soft: #EEEDF3;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121318; --surface: #1C1E25; --ink: #ECEDF2; --muted: #9AA1B2; --line: #2D303B;
+  --accent: #A78BFA; --accent-soft: #2A2342;
+  --done: #4ADE80; --done-soft: #16301F; --next: #FBBF24; --next-soft: #33280F;
+  --plan: #A9A6B8; --plan-soft: #262833; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121318; --surface: #1C1E25; --ink: #ECEDF2; --muted: #9AA1B2; --line: #2D303B;
+  --accent: #A78BFA; --accent-soft: #2A2342;
+  --done: #4ADE80; --done-soft: #16301F; --next: #FBBF24; --next-soft: #33280F;
+  --plan: #A9A6B8; --plan-soft: #262833; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 920px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 64px; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font: 500 12px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 800 clamp(30px, 6vw, 44px)/1.05 var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.lede { color: var(--muted); max-width: 62ch; margin: 0; }
+
+.summary { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; padding: 16px 18px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.meter { flex: 1 1 240px; min-width: 0; display: grid; gap: 6px; }
+.meter-bar { height: 8px; border-radius: 99px; background: var(--plan-soft); overflow: hidden; display: flex; }
+.meter-bar span { display: block; height: 100%; }
+.meter-label { font: 500 13px var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.counts { display: flex; gap: 16px; flex-wrap: wrap; }
+.count { display: grid; }
+.count b { font: 800 24px/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.count small { color: var(--muted); font-size: 12px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.filters button { font: 600 13px var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 99px; padding: 6px 14px; cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.filters button:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+section.phase { display: grid; gap: 12px; }
+.phase-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.phase-no { font: 500 12px var(--f-mono); color: var(--accent); letter-spacing: .06em; }
+.phase-head h2 { font: 600 22px/1.2 var(--f-display); margin: 0; }
+.phase-why { color: var(--muted); margin: 0; flex-basis: 100%; font-size: 14px; }
+
+.rows { display: grid; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row .main { min-width: 0; display: grid; gap: 4px; }
+.row h3 { font: 600 16px/1.3 var(--f-body); margin: 0; }
+.row p { margin: 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+.row .note { font-size: 13px; color: var(--muted); }
+.row .note b { color: var(--ink); font-weight: 600; }
+.meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.pill { font: 500 11px var(--f-mono); letter-spacing: .05em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; white-space: nowrap; }
+.pill.done { color: var(--done); background: var(--done-soft); }
+.pill.next { color: var(--next); background: var(--next-soft); }
+.pill.plan { color: var(--plan); background: var(--plan-soft); }
+.size { font: 500 12px var(--f-mono); color: var(--muted); white-space: nowrap; }
+.row.is-done h3 { text-decoration: line-through; text-decoration-color: var(--muted); }
+
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 560px) {
+  .row { grid-template-columns: 1fr; }
+  .meta { flex-direction: row; align-items: center; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">UbiClipper · v1.7</div>
+    <h1>UbiClipper Roadmap</h1>
+    <p class="lede">Everything we're adding, in the order we'll build it. Each phase leaves the app in a better, shippable state, so nothing waits on the whole list.</p>
+  </header>
+
+  <div class="summary" aria-live="polite">
+    <div class="meter">
+      <div class="meter-bar" id="bar"></div>
+      <div class="meter-label" id="meterLabel"></div>
+    </div>
+    <div class="counts" id="counts"></div>
+  </div>
+
+  <div class="filters" role="group" aria-label="Show">
+    <button type="button" data-f="all" aria-pressed="true">All</button>
+    <button type="button" data-f="next" aria-pressed="false">Up next</button>
+    <button type="button" data-f="plan" aria-pressed="false">Planned</button>
+    <button type="button" data-f="done" aria-pressed="false">Done</button>
+  </div>
+
+  <main id="phases"></main>
+
+  <footer>Sizes are rough build effort: <b>S</b> a session, <b>M</b> a few sessions, <b>L</b> a bigger project. Status is updated here every time a version ships.</footer>
+</div>
+
+<script>
+const PHASES = [
+  { title: "Check on your PC", why: "Making sure the new features hold up on real Windows before we build on top.", items: [
+    { t: "Real-PC check", d: "Tested on your PC: AI judge, speaker colours, Turkish interface, two output folders. Found the mixed-language and Windows-warning issues, fixed in v1.5.", s: "S", st: "done" },
+  ]},
+  { title: "Everyday editing", why: "Saves time on every single stream.", items: [
+    { t: "Trim editor", d: "Drag each clip's start and end on a mini timeline with the waveform and a preview, instead of re-analysing. Shipped in v1.4.", s: "M", st: "done" },
+    { t: "Clip downloader", d: "Paste a Twitch, Kick or YouTube clip link and get the mp4, then add subtitles and the 9:16 version right away. Shipped in v1.5.", s: "S", st: "done" },
+    { t: "Fix subtitles and speaker colours by hand", d: "Subtitle editor: fix words, timing and who said each line, play single lines, split, merge, add or delete lines. Export keeps the edits. Shipped in v1.6.", s: "M", st: "done" },
+    { t: "Custom subtitle position", d: "Drag the subtitles anywhere on the 9:16 screen, with TikTok, Instagram Reels and YouTube Shorts button outlines so they don't end up behind a username or Follow button. Shipped in v1.7.", s: "S", st: "done" },
+  ]},
+  { title: "Ready for other people", why: "Decides whether strangers can install and keep using the app at all.", items: [
+    { t: "Windows installer", d: "One UbiClipper-Setup.exe with Python and FFmpeg bundled. No command windows, no .bat files.", s: "L", st: "next" },
+    { t: "Code signing", d: "So Smart App Control doesn't block the app. Apply for free signing for open-source projects (SignPath Foundation, to be confirmed).", s: "M", st: "plan", dep: "Windows installer" },
+    { t: "Auto-updates", d: "A \"new version available\" button that updates in place.", s: "M", st: "plan", dep: "Windows installer" },
+    { t: "First-run wizard", d: "Pick the app language and the language you stream in, mark your webcam, run the setup check. Done.", s: "S", st: "plan" },
+    { t: "Bug reports", d: "A \"copy diagnostic info\" button plus a place to send problems.", s: "S", st: "plan" },
+    { t: "Licence and privacy note", d: "Pick a licence. Say clearly that everything runs on the user's PC and nothing is uploaded unless they post.", s: "S", st: "plan" },
+    { t: "Website / GitHub page", d: "Demo video, download button, setup guide and the account-connection guide.", s: "M", st: "plan", dep: "Windows installer" },
+  ]},
+  { title: "Hands-off workflow", why: "Clips wait for you after every stream, and posting runs on its own.", items: [
+    { t: "Watch my channel", d: "Point the app at your Kick or Twitch channel. When a stream ends it downloads, analyses and has clips ready, with a notification.", s: "L", st: "plan" },
+    { t: "Batch mode", d: "Queue several VODs and process them in one go.", s: "M", st: "plan" },
+    { t: "Scheduled posting", d: "Spread clips out, for example one per day at 19:00, instead of posting them all at once.", s: "M", st: "plan" },
+    { t: "Stats and learning", d: "Pull views and likes of posted clips back in, show which kinds of moments do best, and slowly tune scoring to what works for you.", s: "L", st: "plan", dep: "Scheduled posting" },
+  ]},
+  { title: "Smarter clips", why: "Catches what sound and words miss, and makes clips look edited by hand.", items: [
+    { t: "Webcam reactions", d: "Watch the facecam for sudden movement, hands on the head or a big grin. Visual comedy is the one thing the app can't catch yet.", s: "L", st: "plan" },
+    { t: "Auto-find the webcam", d: "Detect the camera box automatically so new users don't have to draw it.", s: "M", st: "plan" },
+    { t: "Smart zoom", d: "A quick punch-in on the face at the peak of a reaction.", s: "M", st: "plan", dep: "Auto-find the webcam" },
+    { t: "Sound effects and meme overlays", d: "Optional vine boom, bruh and similar on big moments, with your own sound pack.", s: "M", st: "plan" },
+  ]},
+  { title: "Reach", why: "More people can use it in their own language.", items: [
+    { t: "Mixed-language subtitles", d: "Sentences said in a second language (e.g. English between Turkish) are written in that language instead of being translated. Shipped in v1.5.", s: "M", st: "done" },
+    { t: "More interface languages", d: "Spanish, Portuguese and German first. Drafted here, polished by native speakers.", s: "M", st: "plan" },
+  ]},
+  { title: "Mobile app", why: "Clip, fix and post from your phone. Android first, iPhone later.", items: [
+    { t: "Phone companion", d: "Your PC does the heavy work; the phone shows the finished clips so you can watch, trim, fix subtitles and post from the couch. The quickest way to get UbiClipper on a phone.", s: "M", st: "plan", dep: "Windows installer" },
+    { t: "Phone-ready engine", d: "Rebuild the moment finder, subtitles and 9:16 cutting with parts that run on Android (ONNX Runtime, whisper.cpp, the phone's own video encoder). Smaller AI models so phones don't overheat.", s: "L", st: "plan" },
+    { t: "Android app", d: "Full clipper on the phone: download a clip or a short VOD, find moments, add subtitles, place them on the 9:16 screen and post. Long VODs stay faster on the PC.", s: "L", st: "plan", dep: "Phone-ready engine" },
+    { t: "Google Play release", d: "Store page, screenshots and the privacy form. Google charges a one-time developer fee.", s: "S", st: "plan", dep: "Android app" },
+    { t: "iPhone app", d: "Same app for iOS, reusing the Android work. Needs a paid Apple developer account (yearly) and a Mac to build on.", s: "L", st: "plan", dep: "Android app" },
+  ]},
+];
+
+const LABEL = { done: "Done", next: "Up next", plan: "Planned" };
+const COLOR = { done: "var(--done)", next: "var(--next)", plan: "var(--plan)" };
+let filter = "all";
+try { filter = localStorage.getItem("ubi-roadmap-filter") || "all"; } catch (e) {}
+
+function render() {
+  const all = PHASES.flatMap(p => p.items);
+  const n = s => all.filter(i => i.st === s).length;
+  const total = all.length;
+  document.getElementById("bar").innerHTML = ["done", "next"].map(s =>
+    `<span style="width:${(n(s) / total) * 100}%;background:${COLOR[s]}"></span>`).join("");
+  document.getElementById("meterLabel").textContent = `${n("done")} of ${total} done`;
+  document.getElementById("counts").innerHTML = ["next", "plan", "done"].map(s =>
+    `<div class="count"><b style="color:${COLOR[s]}">${n(s)}</b><small>${LABEL[s]}</small></div>`).join("");
+
+  const root = document.getElementById("phases");
+  root.innerHTML = "";
+  root.style.display = "grid"; root.style.gap = "28px";
+  PHASES.forEach((p, k) => {
+    const items = p.items.filter(i => filter === "all" || i.st === filter);
+    if (!items.length) return;
+    const sec = document.createElement("section");
+    sec.className = "phase";
+    sec.innerHTML = `<div class="phase-head"><span class="phase-no">PHASE ${k}</span><h2>${p.title}</h2><p class="phase-why">${p.why}</p></div>
+      <div class="rows">${items.map(i => `
+        <div class="row ${i.st === "done" ? "is-done" : ""}">
+          <div class="main"><h3>${i.t}</h3><p>${i.d}</p>${i.dep ? `<div class="note">Needs: <b>${i.dep}</b></div>` : ""}</div>
+          <div class="meta"><span class="pill ${i.st}">${LABEL[i.st]}</span><span class="size">Size ${i.s}</span></div>
+        </div>`).join("")}</div>`;
+    root.appendChild(sec);
+  });
+  if (!root.children.length) root.innerHTML = `<p style="color:var(--muted)">Nothing here yet.</p>`;
+  document.querySelectorAll(".filters button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.f === filter)));
+}
+document.querySelectorAll(".filters button").forEach(b => b.addEventListener("click", () => {
+  filter = b.dataset.f;
+  try { localStorage.setItem("ubi-roadmap-filter", filter); } catch (e) {}
+  render();
+}));
+render();
+</script>
+</body>
+</html>

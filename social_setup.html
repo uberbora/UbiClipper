@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UbiClipper account setup</title>
+<style>
+  :root { --bg:#121318; --card:#1F222A; --text:#ECEDF2; --muted:#9AA1B2; --accent:#8B5CF6;
+          --border:#343946; --warn:#F59E0B; --code:#2A2E38; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#F2F3F7; --card:#FFFFFF; --text:#1B1D24; --muted:#5E6575; --accent:#7C3AED;
+            --border:#D8DBE4; --warn:#B45309; --code:#F0F1F6; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:820px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  h1 span { color:var(--accent); }
+  .lead { color:var(--muted); margin:0 0 24px; }
+  nav { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px; }
+  nav a { background:var(--card); border:1px solid var(--border); color:var(--text);
+          padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:600; }
+  nav a:hover { border-color:var(--accent); }
+  section { background:var(--card); border:1px solid var(--border); border-radius:12px;
+            padding:20px 24px; margin-bottom:20px; }
+  h2 { margin:0 0 6px; font-size:21px; }
+  h3 { font-size:15px; margin:18px 0 4px; color:var(--accent); text-transform:uppercase;
+       letter-spacing:.04em; }
+  ol { padding-left:22px; } li { margin:6px 0; }
+  code { background:var(--code); padding:1px 6px; border-radius:4px; font-size:13.5px;
+         word-break:break-all; }
+  a { color:var(--accent); }
+  .note { border-left:3px solid var(--warn); padding:6px 12px; margin:12px 0;
+          background:var(--code); border-radius:0 6px 6px 0; }
+  .ok { border-left-color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<h1>Ubi<span>Clipper</span> account setup</h1>
+<p class="lead">Export All posts clips through each platform's official API. Every platform
+requires you to create your own (free) developer app once and paste its two keys into
+UbiClipper. This takes about 10–20 minutes per platform. Your keys and login tokens stay on
+your PC, encrypted with your Windows account.</p>
+
+<nav><a href="#tiktok">TikTok</a><a href="#instagram">Instagram Reels</a><a href="#youtube">YouTube Shorts</a><a href="#trouble">Troubleshooting</a></nav>
+
+<p class="note ok">The redirect URI UbiClipper uses for TikTok and Instagram is
+<code>http://localhost:8765/callback</code>. For YouTube it is
+<code>http://127.0.0.1:8765/callback</code>. Copy them exactly.</p>
+
+<section id="tiktok">
+<h2>TikTok (sends clips to your drafts)</h2>
+<ol>
+  <li>Go to <a href="https://developers.tiktok.com/">developers.tiktok.com</a> and log in with
+      your TikTok account. Click <b>Manage apps → Connect an app</b> and create an app (any name,
+      e.g. "UbiClipper personal").</li>
+  <li>At the top of the app page, switch to <b>Sandbox</b> and create a sandbox. A sandbox works
+      immediately without TikTok reviewing your app.</li>
+  <li>Under <b>Products</b>, add <b>Login Kit</b> and <b>Content Posting API</b>.</li>
+  <li>In Login Kit, choose platform <b>Desktop</b> and add the redirect URI
+      <code>http://localhost:8765/callback</code>.</li>
+  <li>Under <b>Scopes</b>, make sure <code>user.info.basic</code> and
+      <code>video.upload</code> are added.</li>
+  <li>In the sandbox settings, under <b>Target users</b>, add your own TikTok account.</li>
+  <li>Copy the <b>Client key</b> and <b>Client secret</b> from the app page.</li>
+  <li>In UbiClipper: <b>Accounts → TikTok → Connect…</b>, paste both, click
+      <b>Log in &amp; connect</b> and approve in the browser window that opens.</li>
+</ol>
+<p class="note">Clips arrive in your TikTok <b>inbox / drafts</b>: you get a notification in
+the TikTok app, then add music or effects and press Post yourself. Posting straight to your
+profile requires TikTok to audit the app, which they don't do for personal tools.</p>
+</section>
+
+<section id="instagram">
+<h2>Instagram Reels</h2>
+<h3>Before you start</h3>
+<ol>
+  <li>Your Instagram account must be a <b>Creator</b> or <b>Business</b> account
+      (Instagram → Settings → Account type and tools → Switch to professional account).</li>
+  <li>It must be linked to a <b>Facebook Page</b> (create one if needed, then in the Page's
+      settings → Linked accounts → Instagram).</li>
+</ol>
+<h3>Create the app</h3>
+<ol>
+  <li>Go to <a href="https://developers.facebook.com/apps/">developers.facebook.com/apps</a>
+      and click <b>Create app</b>. Choose the <b>Business</b> type (or the use case
+      "Manage everything on your Page / Instagram").</li>
+  <li>Add the product <b>Facebook Login for Business</b>. In its <b>Settings</b>, add
+      <code>http://localhost:8765/callback</code> under <b>Valid OAuth Redirect URIs</b>
+      and save.</li>
+  <li>Make sure these permissions are available to the app (App Review → Permissions and
+      features; standard access is enough while you are the app's admin):
+      <code>instagram_basic</code>, <code>instagram_content_publish</code>,
+      <code>pages_show_list</code>, <code>business_management</code>.</li>
+  <li>Open <b>App settings → Basic</b> and copy the <b>App ID</b> and <b>App secret</b>.</li>
+  <li>In UbiClipper: <b>Accounts → Instagram → Connect…</b>, paste both and log in with the
+      Facebook account that manages the Page. Tick your Page and Instagram account when asked.</li>
+</ol>
+<p class="note">The app can stay in development mode: as the admin you can post to your own
+account. The login lasts about <b>60 days</b>; after that, press <b>Reconnect…</b>.</p>
+</section>
+
+<section id="youtube">
+<h2>YouTube Shorts</h2>
+<ol>
+  <li>Go to <a href="https://console.cloud.google.com/">console.cloud.google.com</a> and create
+      a new project (e.g. "UbiClipper").</li>
+  <li>Open <b>APIs &amp; Services → Library</b>, search <b>YouTube Data API v3</b> and click
+      <b>Enable</b>.</li>
+  <li>Open <b>OAuth consent screen</b> (Google Auth Platform): user type <b>External</b>, fill
+      in the app name and your email. Leave it in <b>Testing</b> and add your own Google
+      account under <b>Test users</b>.</li>
+  <li>Open <b>Credentials → Create credentials → OAuth client ID</b>, application type
+      <b>Desktop app</b>. Copy the <b>Client ID</b> and <b>Client secret</b>.</li>
+  <li>In UbiClipper: <b>Accounts → YouTube → Connect…</b>, paste both and log in. Google warns
+      that the app isn't verified: click <b>Continue</b> (it's your own app).</li>
+</ol>
+<p class="note">Two Google rules for unverified personal apps: uploads are <b>locked to
+private</b> until the project passes Google's API audit (you can switch each video to public
+in YouTube Studio), and while the consent screen is in <b>Testing</b> the login expires after
+<b>7 days</b>, so press <b>Reconnect…</b> weekly. Vertical clips of 60 s or less are shown as
+Shorts automatically.</p>
+</section>
+
+<section id="trouble">
+<h2>Troubleshooting</h2>
+<ol>
+  <li><b>"redirect_uri mismatch"</b>: the URI in the developer app must match exactly,
+      including <code>http</code>, the port <code>8765</code> and <code>/callback</code>.</li>
+  <li><b>Browser says "can't connect" after logging in</b>: UbiClipper must stay open while you
+      log in, and nothing else may use port 8765.</li>
+  <li><b>Instagram: "no Instagram business account found"</b>: the Instagram account isn't a
+      professional account or isn't linked to the Page you selected during login.</li>
+  <li><b>Something expired</b>: open Accounts and press <b>Reconnect…</b>. Your keys are
+      remembered.</li>
+  <li>Already-posted clips are marked in the Export All window so you don't post twice.</li>
+</ol>
+</section>
+</main>
+</body>
+</html>

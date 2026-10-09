@@ -1,0 +1,4 @@
+# CUDA 12 + cuDNN 9 libraries for faster-whisper on NVIDIA GPUs (~1 GB, once)
+nvidia-cublas-cu12
+nvidia-cuda-runtime-cu12
+nvidia-cudnn-cu12>=9,<10

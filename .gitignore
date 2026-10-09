@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+dist/
+build/
+corrections.txt
+.installed_*
+.models_ok
