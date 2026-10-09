@@ -47,6 +47,9 @@ Write-Host "== Installing packages"
 & $Py -m pip install --disable-pip-version-check --no-warn-script-location -q --upgrade pip
 & $Py -m pip install --disable-pip-version-check --no-warn-script-location -q -r requirements.txt -r requirements-optional.txt
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
+# PyAV comes with faster-whisper but is never loaded (FFmpeg decodes the
+# audio); it carries the unsigned DLL Smart App Control complains about.
+& $Py -m pip uninstall -y -q av
 # pip's .exe launchers point at this build machine; the app doesn't use them
 Remove-Item -Recurse -Force (Join-Path $PyDst "Scripts") -ErrorAction SilentlyContinue
 Get-ChildItem $PyDst -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force
