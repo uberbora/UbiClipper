@@ -82,6 +82,27 @@ jobs:
           Write-Host "Install / start / uninstall OK"
           Stop-Transcript | Out-Null
 
+      - name: Share screenshots and test log (ci-shots branch)
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path test.log) {
+            $t = (Get-Content test.log | Select-String -Pattern "\[(OK|!!|XX)\]|OK$|unpacked|whl" | ForEach-Object Line) -join "%0A"
+            Write-Host "::notice title=Install test::$t"
+          }
+          if (-not (Test-Path shots)) { exit 0 }
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\s" | Out-Null
+          Copy-Item shots\*, test.log "$env:RUNNER_TEMP\s" -ErrorAction SilentlyContinue
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout -q --orphan ci-shots
+          git rm -rq --cached .
+          Get-ChildItem -Force | Where-Object { $_.Name -ne ".git" } | Remove-Item -Recurse -Force
+          Copy-Item "$env:RUNNER_TEMP\s\*" .
+          git add -A
+          git commit -qm "Screenshots of run $env:GITHUB_RUN_ID"
+          git push -qf origin ci-shots
+
       - uses: actions/upload-artifact@v5
         if: always()
         with:
