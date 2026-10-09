@@ -1086,7 +1086,8 @@ class App(_Base):
     def _check_setup(self) -> None:
         here = os.path.dirname(os.path.abspath(__file__))
         out = subprocess.run([sys.executable, os.path.join(here, "check_setup.py")],
-                             capture_output=True, text=True, cwd=here).stdout
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", cwd=here).stdout
         win = tk.Toplevel(self)
         win.title("Setup check")
         txt = tk.Text(win, width=110, height=24, relief="flat", padx=12, pady=10,

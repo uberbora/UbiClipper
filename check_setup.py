@@ -18,6 +18,11 @@ OK, WARN, BAD = "  [OK]  ", "  [!!]  ", "  [XX]  "
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 problems = 0
+for _s in (sys.stdout, sys.stderr):      # → and ✓ on any Windows code page
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 
 def line(tag: str, text: str) -> None:
