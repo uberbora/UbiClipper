@@ -456,7 +456,10 @@
   "GPU speed-up ready": "GPU hızlandırma hazır",
   "All AI downloads & GPU speed-up…": "Tüm AI indirmeleri ve GPU hızlandırma…",
   "No CUDA GPU visible. If you have an NVIDIA card, update its driver.": "CUDA destekli GPU görünmüyor. NVIDIA kartın varsa sürücüsünü güncelle.",
-  "NVIDIA GPU found, but CUDA libraries are missing ({0}). Settings → All AI downloads & GPU speed-up.": "NVIDIA GPU bulundu ama CUDA kütüphaneleri eksik ({0}). Ayarlar → Tüm AI indirmeleri ve GPU hızlandırma."
+  "NVIDIA GPU found, but CUDA libraries are missing ({0}). Settings → All AI downloads & GPU speed-up.": "NVIDIA GPU bulundu ama CUDA kütüphaneleri eksik ({0}). Ayarlar → Tüm AI indirmeleri ve GPU hızlandırma.",
+  "Blocked by Windows' Smart App Control: subtitles use the processor": "Windows Akıllı Uygulama Denetimi engelliyor: altyazılar işlemciyle yapılır",
+  "Windows' Smart App Control blocks NVIDIA's GPU files on this PC (NVIDIA doesn't sign them), so subtitles and the AI judge use the processor.": "Windows Akıllı Uygulama Denetimi bu bilgisayarda NVIDIA'nın GPU dosyalarını engelliyor (NVIDIA bunları imzalamıyor), bu yüzden altyazılar ve AI hakem işlemciyle çalışır.",
+  "Failed: Windows' Smart App Control blocks NVIDIA's GPU files on this PC (NVIDIA doesn't sign them), so subtitles and the AI judge use the processor.": "Windows Akıllı Uygulama Denetimi bu bilgisayarda NVIDIA'nın GPU dosyalarını engelliyor; altyazılar ve AI hakem işlemciyle çalışır."
  },
  "help": {
   "max_clips": "En fazla kaç klip yapılacağı.\n\nauto: yeterince iyi olan her an (Hassasiyet kaydırıcısı karar verir), çok uzun yayınlar için makul bir üst sınırla.\nBir sayı (100'e kadar ya da her sayı için Özel…): en iyi N an; gerekirse daha sakin anlara da bakar.",

@@ -347,15 +347,62 @@ def pe_signed(path: str) -> bool:
         return False
 
 
-def _unsigned_cuda_libs() -> list[str]:
-    names = ("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudnn_ops64_9.dll")
-    bad = []
-    for d in _nvidia_lib_dirs():
-        for n in names:
+_CUDA_DLLS = ("cudart64_12.dll", "cublasLt64_12.dll", "cublas64_12.dll", "cudnn_ops64_9.dll")
+_GPU_CHECK = os.path.join(os.path.expanduser("~"), ".ubiclipper", "gpu_check.json")
+
+
+def _cuda_paths() -> list[str]:
+    out = []
+    for n in _CUDA_DLLS:
+        for d in _nvidia_lib_dirs():
             p = os.path.join(d, n)
-            if os.path.isfile(p) and not pe_signed(p):
-                bad.append(n)
-    return bad
+            if os.path.isfile(p):
+                out.append(p)
+                break
+    return out
+
+
+def gpu_block_reason() -> str:
+    """With Smart App Control on, NVIDIA's unsigned cuBLAS may be blocked.
+    Find out once, in a separate process (so a blocked DLL can't take the app
+    down), and remember the answer until the files change. "" = fine."""
+    if not smart_app_control_on():
+        return ""
+    paths = _cuda_paths()
+    unsigned = [p for p in paths if not pe_signed(p)]
+    if not unsigned:
+        return ""
+    import json
+    import subprocess
+    key = ";".join(f"{os.path.basename(p)}:{os.path.getsize(p)}" for p in paths)
+    try:
+        with open(_GPU_CHECK, encoding="utf-8") as f:
+            saved = json.load(f)
+        if saved.get("key") == key:
+            return saved.get("blocked", "")
+    except (OSError, ValueError):
+        pass
+    probe = ("import ctypes, os, sys\n"
+             "for p in sys.argv[1:]:\n"
+             "    os.add_dll_directory(os.path.dirname(p))\n"
+             "for p in sys.argv[1:]:\n"
+             "    ctypes.WinDLL(p)\n")
+    try:
+        r = subprocess.run([sys.executable, "-c", probe, *paths], capture_output=True,
+                           text=True, timeout=120)
+        ok = r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    blocked = "" if ok else (
+        "Windows' Smart App Control blocks NVIDIA's GPU files on this PC (NVIDIA "
+        "doesn't sign them), so subtitles and the AI judge use the processor.")
+    try:
+        os.makedirs(os.path.dirname(_GPU_CHECK), exist_ok=True)
+        with open(_GPU_CHECK, "w", encoding="utf-8") as f:
+            json.dump({"key": key, "blocked": blocked}, f)
+    except OSError:
+        pass
+    return blocked
 
 
 _GPU_BROKEN: list[str] = []      # set when the GPU failed for real this session
@@ -374,13 +421,11 @@ def gpu_status() -> tuple[bool, str]:
                        "its driver.")
     if _GPU_BROKEN:
         return False, _GPU_BROKEN[0]
-    if smart_app_control_on():
-        unsigned = _unsigned_cuda_libs()
-        if unsigned:
-            return False, ("Smart App Control blocks the unsigned NVIDIA files ("
-                           + ", ".join(sorted(set(unsigned))) + "). Settings → All AI "
-                           "downloads & GPU speed-up downloads signed ones.")
     missing = _missing_cuda_libs()
+    if not missing:
+        blocked = gpu_block_reason()
+        if blocked:
+            return False, blocked
     if missing:
         return False, ("NVIDIA GPU found, but CUDA libraries are missing ("
                        + ", ".join(missing) + "). Settings → All AI downloads & GPU speed-up.")

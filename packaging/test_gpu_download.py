@@ -1,6 +1,6 @@
 """CI check: the GPU speed-up downloader gets the pinned NVIDIA packages, and
-every DLL users will load is validly signed (Smart App Control blocks unsigned
-DLLs, so an unsigned build here means a broken GPU speed-up for many users)."""
+reports which DLLs are signed (NVIDIA doesn't sign cuBLAS / the CUDA runtime;
+UbiClipper tests on each PC whether Smart App Control lets them load)."""
 
 import os
 import subprocess
@@ -32,5 +32,7 @@ for root, _, files in os.walk(os.path.join(tmp, "nvidia")):
         if out != "Valid":
             bad.append(f)
 
-print("unsigned or invalid: " + (", ".join(bad) if bad else "none"))
-sys.exit(1 if bad else 0)
+print("not signed: " + (", ".join(bad) if bad else "none"))
+found = {f.lower() for _, _, fs in os.walk(os.path.join(tmp, "nvidia")) for f in fs}
+need = {dll.lower() for *_, dll in g.NVIDIA_PACKAGES}
+sys.exit(0 if need <= found else 1)

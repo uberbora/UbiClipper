@@ -11,6 +11,7 @@ from tkinter import ttk
 from clipper import getready
 
 READY, MISSING, NA = "✓ Ready", "Not downloaded", "No NVIDIA card found: subtitles use the processor"
+BLOCKED = "Blocked by Windows' Smart App Control: subtitles use the processor"
 
 
 class ReadyWindow(tk.Toplevel):
@@ -77,10 +78,16 @@ class ReadyWindow(tk.Toplevel):
         p = theme.current
         ready = self.state[key]
         if text is None:
-            text = READY if ready else (NA if ready is None else MISSING)
+            text = READY if ready else (self._na(key) if ready is None else MISSING)
         if color is None:
             color = p["ok"] if ready else p["muted"]
         self.labels[key].config(text=text, foreground=color)
+
+    @staticmethod
+    def _na(key: str) -> str:
+        if key == "gpu" and getready.nvidia_gpu():
+            return BLOCKED
+        return NA
 
     def _todo(self) -> list[str]:
         return [it.key for it in getready.ITEMS
@@ -129,6 +136,10 @@ class ReadyWindow(tk.Toplevel):
                 self._ui(lambda k=key: self._show(k, "Stopped", None))
                 break
             except Exception as e:      # noqa: BLE001 - shown to the user
+                if key == "gpu" and getready.gpu_blocked():
+                    self.state[key] = None   # downloaded, but Windows won't load it
+                    self._ui(lambda k=key: self._show(k))
+                    continue
                 failed.append(key)
                 err = str(e)[:160]
                 self._ui(lambda k=key, err=err: self._show(k, "Failed: " + err, "#E5484D"))

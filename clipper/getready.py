@@ -33,13 +33,14 @@ Report = Callable[[str, float | None], None]     # (message, fraction 0..1 or No
 Cancel = Callable[[], bool]
 
 # package, required major version, exact version (None = newest), DLL that
-# proves it's there. Pinned to builds whose Windows DLLs are signed by NVIDIA:
-# some newer builds ship unsigned DLLs, which Smart App Control blocks
-# (packaging/probe_nvidia.py checks this on GitHub's Windows machines).
+# proves it's there. NVIDIA doesn't sign cuBLAS / the CUDA runtime on Windows
+# (no version, in any download: packaging/probe_*.py checked), so on PCs with
+# Smart App Control the GPU may be blocked; transcribe.gpu_status() tests that
+# once and falls back to the CPU quietly.
 NVIDIA_PACKAGES = [
-    ("nvidia-cuda-runtime-cu12", 12, PIN_CUDART, "cudart64_12.dll"),
-    ("nvidia-cublas-cu12", 12, PIN_CUBLAS, "cublas64_12.dll"),
-    ("nvidia-cudnn-cu12", 9, PIN_CUDNN, "cudnn_ops64_9.dll"),
+    ("nvidia-cuda-runtime-cu12", 12, None, "cudart64_12.dll"),
+    ("nvidia-cublas-cu12", 12, None, "cublas64_12.dll"),
+    ("nvidia-cudnn-cu12", 9, None, "cudnn_ops64_9.dll"),
 ]
 
 
@@ -121,14 +122,14 @@ def nvidia_gpu() -> bool:
 
 
 def _have_dll(dll: str) -> bool:
-    """The DLL is there and, with Smart App Control on, signed (else blocked)."""
-    from .transcribe import _nvidia_lib_dirs, pe_signed, smart_app_control_on
-    strict = smart_app_control_on()
-    for d in _nvidia_lib_dirs():
-        p = os.path.join(d, dll)
-        if os.path.isfile(p) and (not strict or pe_signed(p)):
-            return True
-    return False
+    from .transcribe import _nvidia_lib_dirs
+    return any(os.path.isfile(os.path.join(d, dll)) for d in _nvidia_lib_dirs())
+
+
+def gpu_blocked() -> bool:
+    """The NVIDIA files are here but Windows (Smart App Control) won't load them."""
+    from .transcribe import gpu_block_reason
+    return bool(gpu_block_reason())
 
 
 def gpu_libs_ready() -> bool:
@@ -147,7 +148,9 @@ def status(model: str = WHISPER_DEFAULT) -> dict[str, bool | None]:
         "listen": safe(listen_ready),
         "voices": safe(voices_ready),
         "judge": safe(judge_ready),
-        "gpu": safe(gpu_libs_ready) if nvidia_gpu() else None,
+        # None = nothing to download here: no NVIDIA card, or Windows blocks it
+        "gpu": (None if not nvidia_gpu() or (safe(gpu_libs_ready) and safe(gpu_blocked))
+                else safe(gpu_libs_ready)),
     }
 
 
@@ -325,9 +328,6 @@ def get_gpu_libs(report: Report, cancel: Cancel) -> None:
         if _have_dll(dll):
             base += share
             continue
-        # an older unsigned copy from a previous download goes first
-        sub = pkg.replace("nvidia-", "").replace("-cu12", "").replace("-", "_")
-        shutil.rmtree(os.path.join(NVIDIA_DIR, sub), ignore_errors=True)
         dest = os.path.join(dl_dir, w["filename"])
         label = pkg.replace("nvidia-", "").replace("-cu12", "")
         _download(w["url"], dest, w["size"], (w.get("digests") or {}).get("sha256"),
@@ -340,4 +340,7 @@ def get_gpu_libs(report: Report, cancel: Cancel) -> None:
     shutil.rmtree(dl_dir, ignore_errors=True)
     from . import transcribe
     transcribe._cuda_prepared = False       # pick up the new folders
+    reason = transcribe.gpu_block_reason()
+    if reason:
+        raise RuntimeError(reason)
     report("GPU speed-up ready", 1.0)
