@@ -3,14 +3,14 @@
 Runs on a GitHub Linux machine (packaging/models workflow), not on users' PCs.
 
 encoder.onnx   mel (B, n_mels, 3000) -> cross_k, cross_v (L, B, 1500, D)
-decoder.onnx   tokens (B, T), self_k, self_v (L, B, 448, D), cross_k, cross_v,
-               offset (1,) -> logits (B, T, V), self_k, self_v (updated),
+decoder.onnx   tokens (B, T), self_k, self_v (L, B0, 448, D), cross_k, cross_v
+               (L, 1, 1500, D), offset (1,), beam (B,) -> logits (B, T, V), self_k, self_v (updated),
                qk (B, A, T, 1500): raw cross-attention scores of the
                alignment heads, for word timestamps (the same signal
                openai-whisper and CTranslate2 use)
 
-Weights are stored as float16 (inputs and outputs stay float32), so the files
-are about 1.3 GB + 0.4 GB.
+Weights, inputs and outputs are float16 (the files are about 1.3 GB + 0.4 GB);
+--fp32 makes a float32 copy for checking.
 
     python export_whisper_onnx.py --model turbo --out whisper-turbo-onnx
 """
@@ -28,13 +28,14 @@ import whisper
 
 
 def attend(q, k, v, n_head, mask=None):
-    """Whisper's attention, written out so the scores can be returned."""
+    """Whisper's attention, written out so the scores can be returned. k and v
+    may have batch 1 (the audio, shared by all beams): it broadcasts."""
     b, t, d = q.shape
-    s = k.shape[1]
+    kb, s = k.shape[0], k.shape[1]
     scale = (d // n_head) ** -0.25
     q = q.view(b, t, n_head, -1).permute(0, 2, 1, 3) * scale
-    k = k.view(b, s, n_head, -1).permute(0, 2, 3, 1) * scale
-    v = v.view(b, s, n_head, -1).permute(0, 2, 1, 3)
+    k = k.view(kb, s, n_head, -1).permute(0, 2, 3, 1) * scale
+    v = v.view(kb, s, n_head, -1).permute(0, 2, 1, 3)
     qk = q @ k                                  # (B, H, T, S)
     if mask is not None:
         qk = qk + mask
@@ -64,11 +65,15 @@ class Decoder(nn.Module):
         heads = model.alignment_heads.to_dense().nonzero().tolist()
         self.heads = [(int(l), int(h)) for l, h in heads]
 
-    def forward(self, tokens, self_k, self_v, cross_k, cross_v, offset):
+    def forward(self, tokens, self_k, self_v, cross_k, cross_v, offset, beam):
         # Only tensor ops on `offset` (no Python ints), so the exported graph
         # works for any offset: new keys/values are scattered into the fixed
         # 448-slot cache and attention masks out the slots not written yet.
+        # `beam` picks (and repeats) cache rows for beam search, so the caches
+        # can stay on the graphics card between steps.
         dec = self.dec
+        self_k = self_k.index_select(1, beam)
+        self_v = self_v.index_select(1, beam)
         b, t = tokens.shape[0], tokens.shape[1]
         n_ctx = self_k.shape[2]
         idx = torch.arange(t, device=tokens.device) + offset          # (T,)
@@ -103,7 +108,8 @@ def to_fp16(src: str, dst: str) -> None:
     import onnx
     from onnxconverter_common import float16
     m = onnx.load(src, load_external_data=True)
-    m16 = float16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True)
+    # inputs/outputs float16 too: caches stay float16 on the graphics card
+    m16 = float16.convert_float_to_float16(m, keep_io_types=False, disable_shape_infer=True)
     onnx.save(m16, dst)
 
 
@@ -133,12 +139,15 @@ def main() -> None:
         sk = torch.zeros(L, 1, d.n_text_ctx, D)
         sv = torch.zeros(L, 1, d.n_text_ctx, D)
         off = torch.tensor([0], dtype=torch.long)
-        torch.onnx.export(dec, (tokens, sk, sv, ck, cv, off), os.path.join(tmp, "decoder.onnx"),
-                          input_names=["tokens", "self_k", "self_v", "cross_k", "cross_v", "offset"],
+        beam = torch.tensor([0], dtype=torch.long)
+        torch.onnx.export(dec, (tokens, sk, sv, ck, cv, off, beam), os.path.join(tmp, "decoder.onnx"),
+                          input_names=["tokens", "self_k", "self_v", "cross_k", "cross_v",
+                                       "offset", "beam"],
                           output_names=["logits", "self_k_out", "self_v_out", "qk"],
-                          dynamic_axes={"tokens": {0: "b", 1: "t"}, "self_k": {1: "b"},
-                                        "self_v": {1: "b"}, "cross_k": {1: "b"},
-                                        "cross_v": {1: "b"}, "logits": {0: "b", 1: "t"},
+                          dynamic_axes={"tokens": {0: "b", 1: "t"}, "self_k": {1: "pb"},
+                                        "self_v": {1: "pb"}, "cross_k": {1: "ab"},
+                                        "cross_v": {1: "ab"}, "beam": {0: "b"},
+                                        "logits": {0: "b", 1: "t"},
                                         "self_k_out": {1: "b"}, "self_v_out": {1: "b"},
                                         "qk": {0: "b", 2: "t"}},
                           opset_version=17, dynamo=False)

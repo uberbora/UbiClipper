@@ -58,6 +58,7 @@ ITEMS = [
     Item("voices", "Voice model for speaker colours", "26 MB", True),
     Item("judge", "AI judge", "4 GB", False),
     Item("gpu", "GPU speed-up for NVIDIA cards", "1.2 GB", False),
+    Item("gpu_dml", "GPU speech model (any graphics card)", "1.7 GB", False),
 ]
 
 
@@ -151,7 +152,18 @@ def status(model: str = WHISPER_DEFAULT) -> dict[str, bool | None]:
         # None = nothing to download here: no NVIDIA card, or Windows blocks it
         "gpu": (None if not nvidia_gpu() or (safe(gpu_libs_ready) and safe(gpu_blocked))
                 else safe(gpu_libs_ready)),
+        # the DirectML model: for AMD / Intel cards, and NVIDIA ones Windows blocks
+        "gpu_dml": _dml_state(safe),
     }
+
+
+def _dml_state(safe):
+    from . import whisper_onnx as wo
+    if not safe(wo.directml_installed):
+        return None
+    if nvidia_gpu() and safe(gpu_libs_ready) and not safe(gpu_blocked):
+        return None                        # NVIDIA's own (faster) path works
+    return safe(wo.model_ready)
 
 
 # ------------------------------------------------------------------ getting
@@ -160,7 +172,8 @@ def get(key: str, report: Report, cancel: Cancel, model: str = WHISPER_DEFAULT) 
      "listen": lambda: _get_listen(report),
      "voices": lambda: _get_voices(report),
      "judge": lambda: _get_judge(report, cancel),
-     "gpu": lambda: get_gpu_libs(report, cancel)}[key]()
+     "gpu": lambda: get_gpu_libs(report, cancel),
+     "gpu_dml": lambda: get_dml_model(report, cancel)}[key]()
 
 
 def _folder_size(path: str) -> int:
@@ -344,3 +357,33 @@ def get_gpu_libs(report: Report, cancel: Cancel) -> None:
     if reason:
         raise RuntimeError(reason)
     report("GPU speed-up ready", 1.0)
+
+
+# ------------------------------------------------------------------ DirectML model
+def get_dml_model(report: Report, cancel: Cancel) -> None:
+    """The ONNX Whisper model for DirectML, from UbiClipper's GitHub release,
+    then a one-time test that this graphics card can run it."""
+    from . import whisper_onnx as wo
+    os.makedirs(wo.MODEL_DIR, exist_ok=True)
+    report("Looking up the GPU speech model…", None)
+    sizes = {}
+    for f in wo.MODEL_FILES:
+        req = urllib.request.Request(wo.MODEL_URL.format(file=f), method="HEAD",
+                                     headers={"User-Agent": "UbiClipper"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            sizes[f] = int(r.headers.get("Content-Length") or 0)
+    total = sum(sizes.values()) or 1
+    base = 0.0
+    for f in wo.MODEL_FILES:
+        dest = os.path.join(wo.MODEL_DIR, f)
+        share = sizes[f] / total
+        if not (os.path.isfile(dest) and os.path.getsize(dest) == sizes[f]):
+            _download(wo.MODEL_URL.format(file=f), dest, sizes[f], None, f, report, cancel,
+                      base, share)
+        base += share
+    report("Testing the graphics card (once, up to a minute)…", None)
+    ok, why = wo.dml_status()
+    if not ok:
+        raise RuntimeError(f"This graphics card can't run it ({why}); subtitles use the "
+                           "processor.")
+    report("GPU speech model ready", 1.0)

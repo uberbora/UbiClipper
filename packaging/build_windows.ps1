@@ -55,6 +55,14 @@ if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 # PyAV comes with faster-whisper but is never loaded (FFmpeg decodes the
 # audio); it carries the unsigned DLL Smart App Control complains about.
 & $Py -m pip uninstall -y -q av
+# faster-whisper pulls in the plain onnxruntime; the DirectML build replaces
+# it (same module name, also runs everything on the CPU)
+$Dml = (Get-Content requirements.txt | Where-Object { $_ -match "^onnxruntime-directml" } | Select-Object -First 1).Split(";")[0].Trim()
+& $Py -m pip uninstall -y -q onnxruntime onnxruntime-directml
+& $Py -m pip install --disable-pip-version-check --no-warn-script-location -q --no-deps "$Dml"
+if ($LASTEXITCODE -ne 0) { throw "onnxruntime-directml install failed" }
+& $Py -c "import onnxruntime as o; p=o.get_available_providers(); print('ONNX Runtime', o.__version__, p); assert 'DmlExecutionProvider' in p"
+if ($LASTEXITCODE -ne 0) { throw "DirectML provider missing" }
 # pip's .exe launchers point at this build machine; the app doesn't use them
 Remove-Item -Recurse -Force (Join-Path $PyDst "Scripts") -ErrorAction SilentlyContinue
 Get-ChildItem $PyDst -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force

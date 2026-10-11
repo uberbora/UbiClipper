@@ -20,7 +20,9 @@ from faster_whisper.audio import decode_audio  # noqa: E402
 from clipper.whisper_onnx import OnnxWhisperModel  # noqa: E402
 
 audio_path = sys.argv[2]
-audio = decode_audio(audio_path)
+one = decode_audio(audio_path)
+# speech, 4 s of silence, speech again: tests the voice filter and timing
+audio = np.concatenate([one, np.zeros(4 * 16000, np.float32), one])
 OPTS = dict(word_timestamps=True, vad_filter=True, beam_size=5,
             condition_on_previous_text=False,
             vad_parameters={"threshold": 0.3, "min_silence_duration_ms": 500,
@@ -41,21 +43,26 @@ rtext = " ".join(s.text.strip() for s in rsegs)
 lines = [f"reference (CTranslate2 fp32): {rt:.1f}s, lang {rinfo.language} "
          f"{rinfo.language_probability:.2f}: {rtext[:300]}"]
 ok = True
-for model_dir in [sys.argv[1]] + sys.argv[3:]:
+runs = [(sys.argv[1], None), (sys.argv[1], "cpu")] + [(d, None) for d in sys.argv[3:]]
+for model_dir, bind in runs:
+    if bind:
+        os.environ["UBI_ONNX_BIND"] = bind       # the IO-binding path DirectML uses
+    else:
+        os.environ.pop("UBI_ONNX_BIND", None)
     try:
         m = OnnxWhisperModel(model_dir, device="cpu")
         segs, words, info, t = run(m)
     except Exception as e:  # noqa: BLE001
         import traceback
         traceback.print_exc()
-        lines.append(f"{model_dir}: FAILED {type(e).__name__}: {str(e)[:300]}")
+        lines.append(f"{model_dir}{' (bound)' if bind else ''}: FAILED {type(e).__name__}: {str(e)[:300]}")
         ok = False
         continue
     text = " ".join(s.text.strip() for s in segs)
     sim = difflib.SequenceMatcher(None, rtext.lower(), text.lower()).ratio()
     pairs = [(a, b) for a, b in zip(rwords, words) if a.word.strip().lower() == b.word.strip().lower()]
     ds = [abs(a.start - b.start) for a, b in pairs] + [abs(a.end - b.end) for a, b in pairs]
-    lines.append(f"{os.path.basename(model_dir.rstrip('/'))}: {t:.1f}s, lang {info.language} "
+    lines.append(f"{os.path.basename(model_dir.rstrip('/'))}{' (bound)' if bind else ''}: {t:.1f}s, lang {info.language} "
                  f"{info.language_probability:.2f}, text match {sim:.3f}, words {len(words)}/"
                  f"{len(rwords)}, timing diff mean {np.mean(ds) if ds else -1:.3f}s max "
                  f"{np.max(ds) if ds else -1:.2f}s: {text[:300]}")

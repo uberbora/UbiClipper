@@ -102,6 +102,11 @@ class OnnxEngine:
         self.d = int(self.cfg["n_text_state"])
         self.enc = make_session(os.path.join(model_dir, "encoder.onnx"), device)
         self.dec = make_session(os.path.join(model_dir, "decoder.onnx"), device)
+        types = {i.name: i.type for i in self.dec.get_inputs()}
+        self.dtype = np.float16 if types.get("self_k") == "tensor(float16)" else np.float32
+        enc_types = {i.name: i.type for i in self.enc.get_inputs()}
+        self.mel_dtype = np.float16 if enc_types.get("mel") == "tensor(float16)" else np.float32
+        self.bind = self._binding_device()
 
         import tokenizers
         tok = tokenizers.Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
@@ -116,39 +121,82 @@ class OnnxEngine:
         self.lang_ids = list(range(self.sot + 1, translate))
         self.lang_tokens = [tok.id_to_token(i) for i in self.lang_ids]
 
+    def _binding_device(self) -> str | None:
+        """Keep the decoder's caches and the audio on the graphics card between
+        steps (IO binding) when ONNX Runtime can; None = plain numpy calls."""
+        forced = os.environ.get("UBI_ONNX_BIND")      # tests: "cpu" exercises the path
+        if forced:
+            return forced
+        if self.device != "dml":
+            return None
+        try:
+            import onnxruntime as ort
+            ort.OrtValue.ortvalue_from_numpy(np.zeros(4, np.float32), "dml", 0)
+            return "dml"
+        except Exception:
+            return None
+
     # ---------------------------------------------------------------- encoder
     def encode(self, features, to_cpu: bool = False) -> EncoderOutput:
         x = np.asarray(features, dtype=np.float32)
         if x.ndim == 2:
             x = x[None]
-        k, v = self.enc.run(None, {"mel": np.ascontiguousarray(x)})
+        k, v = self.enc.run(None, {"mel": np.ascontiguousarray(x.astype(self.mel_dtype))})
         return EncoderOutput(k, v)
 
+    def _audio(self, enc: EncoderOutput, b: int):
+        """Cross-attention keys/values of batch item b (batch 1; it broadcasts
+        over beams), uploaded to the graphics card once."""
+        cache = enc.__dict__.setdefault("_dev", {})
+        if b not in cache:
+            ck = np.ascontiguousarray(enc.cross_k[:, b:b + 1].astype(self.dtype))
+            cv = np.ascontiguousarray(enc.cross_v[:, b:b + 1].astype(self.dtype))
+            if self.bind:
+                import onnxruntime as ort
+                ck = ort.OrtValue.ortvalue_from_numpy(ck, self.bind, 0)
+                cv = ort.OrtValue.ortvalue_from_numpy(cv, self.bind, 0)
+            cache[b] = (ck, cv)
+        return cache[b]
+
     # ---------------------------------------------------------------- decoder
-    def _empty_cache(self, b: int) -> tuple[np.ndarray, np.ndarray]:
-        z = np.zeros((self.n_layer, b, self.n_ctx, self.d), np.float32)
+    def _empty_cache(self):
+        z = np.zeros((self.n_layer, 1, self.n_ctx, self.d), self.dtype)
         return z, z.copy()
 
-    def _step(self, tokens, k, v, ck, cv, offset):
-        logits, k, v, qk = self.dec.run(None, {
-            "tokens": np.ascontiguousarray(tokens, dtype=np.int64),
-            "self_k": k, "self_v": v, "cross_k": ck, "cross_v": cv,
-            "offset": np.array([offset], dtype=np.int64)})
-        return logits, k, v, qk
-
-    @staticmethod
-    def _tile(enc: EncoderOutput, index: int, n: int):
-        ck = np.repeat(enc.cross_k[:, index:index + 1], n, axis=1)
-        cv = np.repeat(enc.cross_v[:, index:index + 1], n, axis=1)
-        return ck, cv
+    def _step(self, tokens, k, v, audio, offset, beam):
+        """One decoder call. k/v: caches from the previous call (any batch);
+        beam: which previous row each new row continues."""
+        ck, cv = audio
+        feeds_small = {"tokens": np.ascontiguousarray(tokens, dtype=np.int64),
+                       "offset": np.array([offset], dtype=np.int64),
+                       "beam": np.ascontiguousarray(beam, dtype=np.int64)}
+        if not self.bind:
+            logits, k, v, qk = self.dec.run(None, dict(
+                feeds_small, self_k=k, self_v=v, cross_k=ck, cross_v=cv))
+            return logits.astype(np.float32), k, v, qk
+        io = self.dec.io_binding()
+        for name, val in feeds_small.items():
+            io.bind_cpu_input(name, val)
+        for name, val in (("self_k", k), ("self_v", v), ("cross_k", ck), ("cross_v", cv)):
+            if isinstance(val, np.ndarray):
+                io.bind_cpu_input(name, val)
+            else:
+                io.bind_ortvalue_input(name, val)
+        io.bind_output("logits")
+        io.bind_output("self_k_out", self.bind)
+        io.bind_output("self_v_out", self.bind)
+        io.bind_output("qk")
+        self.dec.run_with_iobinding(io)
+        out = io.get_outputs()
+        return out[0].numpy().astype(np.float32), out[1], out[2], out[3].numpy()
 
     def detect_language(self, encoder_output: EncoderOutput):
         out = []
         for b in range(encoder_output.cross_k.shape[1]):
-            ck, cv = self._tile(encoder_output, b, 1)
-            k, v = self._empty_cache(1)
-            logits, *_ = self._step(np.array([[self.sot]]), k, v, ck, cv, 0)
-            lg = logits[0, -1, self.lang_ids]
+            k, v = self._empty_cache()
+            logits, *_ = self._step(np.array([[self.sot]]), k, v, self._audio(encoder_output, b),
+                                    0, [0])
+            lg = logits[0, -1, self.lang_ids].astype(np.float64)
             p = _softmax(lg)
             order = np.argsort(-p)
             out.append([(self.lang_tokens[i], float(p[i])) for i in order])
@@ -243,17 +291,14 @@ class OnnxEngine:
             results.append(res)
         return results
 
-    def _first_pass(self, enc, b, prompt, n):
-        ck, cv = self._tile(enc, b, 1)
-        k, v = self._empty_cache(1)
-        logits, k, v, _ = self._step(np.array([prompt]), k, v, ck, cv, 0)
-        k = np.repeat(k, n, axis=1)
-        v = np.repeat(v, n, axis=1)
-        ck, cv = self._tile(enc, b, n)
-        return logits[0], k, v, ck, cv
+    def _first_pass(self, enc, b, prompt):
+        audio = self._audio(enc, b)
+        k, v = self._empty_cache()
+        logits, k, v, _ = self._step(np.array([prompt]), k, v, audio, 0, [0])
+        return logits[0], k, v, audio
 
     def _beam(self, enc, b, prompt, beam, patience, limit, lp_pen, rules, sot_index):
-        logits_all, k, v, ck, cv = self._first_pass(enc, b, prompt, 1)
+        logits_all, k, v, audio = self._first_pass(enc, b, prompt)
         no_speech = float(_softmax(logits_all[sot_index].astype(np.float64))[self.no_speech])
         start = len(prompt)
         # beams: (tokens, sum_logprob)
@@ -289,15 +334,10 @@ class OnnxEngine:
                     or offset + 1 >= limit)
             if done:
                 break
-            # reorder caches to the surviving beams, then one step for all of them
-            if len(parents) != k.shape[1] or parents != list(range(k.shape[1])):
-                k = k[:, parents]
-                v = v[:, parents]
-                if ck.shape[1] != len(parents):
-                    ck, cv = self._tile(enc, b, len(parents))
+            # one step for all surviving beams; the decoder picks their cache rows
             beams = new_beams
             toks = np.array([[s[-1]] for s, _ in beams])
-            logits, k, v, _ = self._step(toks, k, v, ck, cv, offset)
+            logits, k, v, _ = self._step(toks, k, v, audio, offset, parents)
             offset += 1
             last = logits[:, -1].astype(np.float64)
         if not finished:
@@ -311,8 +351,9 @@ class OnnxEngine:
         return GenResult([best[1]], [best[0]], no_speech)
 
     def _sample(self, enc, b, prompt, n, limit, temperature, lp_pen, rules, sot_index):
-        logits_all, k, v, ck, cv = self._first_pass(enc, b, prompt, n)
+        logits_all, k, v, audio = self._first_pass(enc, b, prompt)
         no_speech = float(_softmax(logits_all[sot_index].astype(np.float64))[self.no_speech])
+        rows = [0] * n           # first step: every sample continues the prompt row
         start = len(prompt)
         seqs = [list(prompt) for _ in range(n)]
         scores = [0.0] * n
@@ -339,7 +380,8 @@ class OnnxEngine:
                 nxt.append(tkn)
             if not any(alive) or offset + 1 >= limit:
                 break
-            logits, k, v, _ = self._step(np.array([[t] for t in nxt]), k, v, ck, cv, offset)
+            logits, k, v, _ = self._step(np.array([[t] for t in nxt]), k, v, audio, offset, rows)
+            rows = list(range(n))
             offset += 1
             last = logits[:, -1].astype(np.float64)
         ranked = []
@@ -358,9 +400,9 @@ class OnnxEngine:
             b = j if encoder_output.cross_k.shape[1] > j else 0
             nf = int(frames[j] if frames else num_frames)
             tokens = list(start_sequence) + [self.no_timestamps] + list(text) + [self.eot]
-            ck, cv = self._tile(encoder_output, b, 1)
-            k, v = self._empty_cache(1)
-            logits, _, _, qk = self._step(np.array([tokens]), k, v, ck, cv, 0)
+            k, v = self._empty_cache()
+            logits, _, _, qk = self._step(np.array([tokens]), k, v,
+                                          self._audio(encoder_output, b), 0, [0])
             sampled = logits[0, len(start_sequence):, :self.eot].astype(np.float64)
             probs = _softmax(sampled)
             text_probs = [float(probs[i, t]) for i, t in enumerate(text)]
@@ -451,3 +493,107 @@ def OnnxWhisperModel(model_dir: str, device: str = "dml"):
             return self.model.encode(np.ascontiguousarray(features, dtype=np.float32))
 
     return _Model()
+
+
+# ------------------------------------------------------------------ files
+MODEL_TAG = "model-whisper-turbo-onnx-1"
+MODEL_URL = "https://github.com/uberbora/UbiClipper/releases/download/" + MODEL_TAG + "/{file}"
+MODEL_FILES = ("config.json", "tokenizer.json", "preprocessor_config.json",
+               "decoder.onnx", "encoder.onnx")
+MODEL_DIR = os.path.join(os.path.expanduser("~"), ".ubiclipper", "models", "whisper-turbo-onnx")
+_CHECK = os.path.join(os.path.expanduser("~"), ".ubiclipper", "dml_check.json")
+
+
+def model_ready() -> bool:
+    return all(os.path.isfile(os.path.join(MODEL_DIR, f)) for f in MODEL_FILES)
+
+
+def directml_installed() -> bool:
+    """This copy of UbiClipper has the DirectML build of ONNX Runtime."""
+    return "DmlExecutionProvider" in available_providers()
+
+
+_GPU_NAME: list[str] = []
+
+
+def _gpu_name() -> str:
+    if _GPU_NAME:
+        return _GPU_NAME[0]
+    _GPU_NAME.append(_query_gpu_name())
+    return _GPU_NAME[0]
+
+
+def _query_gpu_name() -> str:
+    try:
+        import subprocess
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name) -join '; '"],
+            capture_output=True, text=True, timeout=20).stdout.strip()
+        return out
+    except Exception:
+        return ""
+
+
+def dml_status(cached_only: bool = False) -> tuple[bool, str]:
+    """Can the GPU speech model run here? Tested once in a separate process
+    (a broken graphics driver can't take the app down), remembered until the
+    model, the graphics card or UbiClipper's ONNX Runtime changes."""
+    if not directml_installed():
+        return False, "this UbiClipper has no DirectML"
+    if not model_ready():
+        return False, "GPU speech model not downloaded"
+    import subprocess
+    import sys
+    try:
+        import onnxruntime
+        ort_ver = onnxruntime.__version__
+    except Exception:
+        ort_ver = "?"
+    size = os.path.getsize(os.path.join(MODEL_DIR, "encoder.onnx"))
+    key = f"{ort_ver}|{size}|{_gpu_name()}"
+    try:
+        with open(_CHECK, encoding="utf-8") as f:
+            saved = json.load(f)
+        if saved.get("key") == key:
+            return bool(saved.get("ok")), saved.get("why", "")
+    except (OSError, ValueError):
+        pass
+    if cached_only:
+        return False, "not tested yet"
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); "
+            "from clipper.whisper_onnx import probe; probe()")
+    try:
+        r = subprocess.run([sys.executable, "-c", code, here], capture_output=True,
+                           text=True, timeout=600)
+        tail = (r.stdout + r.stderr).strip().splitlines()
+        ok = r.returncode == 0
+        why = tail[-1][:200] if tail else ("crashed" if not ok else "")
+    except subprocess.TimeoutExpired:
+        ok, why = False, "the GPU test took too long"
+    except OSError as e:
+        ok, why = False, str(e)
+    try:
+        os.makedirs(os.path.dirname(_CHECK), exist_ok=True)
+        with open(_CHECK, "w", encoding="utf-8") as f:
+            json.dump({"key": key, "ok": ok, "why": why}, f)
+    except OSError:
+        pass
+    return ok, why
+
+
+def probe() -> None:
+    """Child-process test: load on DirectML and transcribe 3 s of a tone.
+    Prints timings; exit code 0 = usable."""
+    import time
+    t = time.time()
+    m = OnnxWhisperModel(MODEL_DIR, device="dml")
+    load = time.time() - t
+    sr = 16000
+    x = (0.1 * np.sin(2 * np.pi * 220 * np.arange(3 * sr) / sr)).astype(np.float32)
+    t = time.time()
+    segs, _ = m.transcribe(x, language="en", beam_size=1, vad_filter=False,
+                           word_timestamps=True, condition_on_previous_text=False)
+    list(segs)
+    print(f"DirectML OK: load {load:.1f}s, 3 s of audio in {time.time() - t:.2f}s")

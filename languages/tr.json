@@ -459,7 +459,15 @@
   "NVIDIA GPU found, but CUDA libraries are missing ({0}). Settings → All AI downloads & GPU speed-up.": "NVIDIA GPU bulundu ama CUDA kütüphaneleri eksik ({0}). Ayarlar → Tüm AI indirmeleri ve GPU hızlandırma.",
   "Blocked by Windows' Smart App Control: subtitles use the processor": "Windows Akıllı Uygulama Denetimi engelliyor: altyazılar işlemciyle yapılır",
   "Windows' Smart App Control blocks NVIDIA's GPU files on this PC (NVIDIA doesn't sign them), so subtitles and the AI judge use the processor.": "Windows Akıllı Uygulama Denetimi bu bilgisayarda NVIDIA'nın GPU dosyalarını engelliyor (NVIDIA bunları imzalamıyor), bu yüzden altyazılar ve AI hakem işlemciyle çalışır.",
-  "Failed: Windows' Smart App Control blocks NVIDIA's GPU files on this PC (NVIDIA doesn't sign them), so subtitles and the AI judge use the processor.": "Windows Akıllı Uygulama Denetimi bu bilgisayarda NVIDIA'nın GPU dosyalarını engelliyor; altyazılar ve AI hakem işlemciyle çalışır."
+  "Failed: Windows' Smart App Control blocks NVIDIA's GPU files on this PC (NVIDIA doesn't sign them), so subtitles and the AI judge use the processor.": "Windows Akıllı Uygulama Denetimi bu bilgisayarda NVIDIA'nın GPU dosyalarını engelliyor; altyazılar ve AI hakem işlemciyle çalışır.",
+  "GPU speech model (any graphics card)": "GPU konuşma modeli (her ekran kartı)",
+  "Blocked by Windows' Smart App Control: use the GPU speech model below": "Windows Akıllı Uygulama Denetimi engelliyor: aşağıdaki GPU konuşma modelini kullan",
+  "Not needed on this PC": "Bu bilgisayarda gerekmiyor",
+  "Looking up the GPU speech model…": "GPU konuşma modeli aranıyor…",
+  "Testing the graphics card (once, up to a minute)…": "Ekran kartı test ediliyor (bir kez, en fazla bir dakika)…",
+  "GPU speech model ready": "GPU konuşma modeli hazır",
+  "This graphics card can't run it ({0}); subtitles use the processor.": "Bu ekran kartı çalıştıramıyor ({0}); altyazılar işlemciyle yapılır.",
+  "Subtitles will run on the GPU (DirectML).": "Altyazılar GPU'da çalışacak (DirectML)."
  },
  "help": {
   "max_clips": "En fazla kaç klip yapılacağı.\n\nauto: yeterince iyi olan her an (Hassasiyet kaydırıcısı karar verir), çok uzun yayınlar için makul bir üst sınırla.\nBir sayı (100'e kadar ya da her sayı için Özel…): en iyi N an; gerekirse daha sakin anlara da bakar.",

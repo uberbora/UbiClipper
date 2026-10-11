@@ -453,14 +453,29 @@ def import_whisper():
     return faster_whisper, note
 
 
+def dml_usable(model: str = "large-v3-turbo", test: bool = True) -> bool:
+    """The DirectML engine has the turbo model only. test=False only reads the
+    remembered result (no one-time GPU test; safe on the UI thread)."""
+    if model not in ("large-v3-turbo", "turbo"):
+        return False
+    try:
+        from .whisper_onnx import dml_status
+        return dml_status(cached_only=not test)[0]
+    except Exception:
+        return False
+
+
 def check_available() -> tuple[bool, str]:
     try:
         import_whisper()
     except WhisperMissing as e:
         return False, str(e)
     usable, why = gpu_status()
-    return True, ("Subtitles will run on the GPU." if usable
-                  else f"Subtitles will run on the CPU (slower). {why}")
+    if usable:
+        return True, "Subtitles will run on the GPU."
+    if dml_usable(test=False):
+        return True, "Subtitles will run on the GPU (DirectML)."
+    return True, f"Subtitles will run on the CPU (slower). {why}"
 
 
 _LOADED: dict[tuple[str, str], "Transcriber"] = {}
@@ -495,6 +510,8 @@ class Transcriber:
             attempts.append(("cuda", "float16"))
         elif opts.device == "cuda":
             raise RuntimeError(f"GPU requested but not usable: {gpu_why}")
+        if opts.device == "auto" and not gpu_ok and dml_usable(opts.model):
+            attempts.append(("dml", "float16"))   # any graphics card, via DirectML
         if opts.device != "cuda":
             attempts.append(("cpu", "int8"))
 
@@ -503,18 +520,26 @@ class Transcriber:
             say(f"Loading speech model on {device.upper()} "
                 "(first run downloads it, ~1.6 GB)…")
             try:
-                self.model = fw.WhisperModel(opts.model, device=device,
-                                             compute_type=compute)
-                if device == "cuda":
+                if device == "dml":
+                    from .whisper_onnx import MODEL_DIR, OnnxWhisperModel
+                    self.model = OnnxWhisperModel(MODEL_DIR, device="dml")
+                else:
+                    self.model = fw.WhisperModel(opts.model, device=device,
+                                                 compute_type=compute)
+                if device in ("cuda", "dml"):
                     self._warm_up()      # CUDA libraries load on first use
                 self.device = device
-                self.device_note = gpu_why if device == "cpu" else "GPU"
+                self.device_note = (gpu_why if device == "cpu" else
+                                    "GPU (DirectML)" if device == "dml" else "GPU")
                 return
             except Exception as e:  # e.g. driver too old -> fall back to CPU
                 last_err = e
                 if device == "cuda":
                     gpu_why = f"GPU didn't work ({str(e)[:160]}), using the CPU"
                     _GPU_BROKEN[:] = [gpu_why]
+                    self.model = None
+                elif device == "dml":
+                    gpu_why = f"GPU (DirectML) didn't work ({str(e)[:160]}), using the CPU"
                     self.model = None
         raise RuntimeError(f"Could not load Whisper model '{opts.model}': {last_err}")
 

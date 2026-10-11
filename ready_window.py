@@ -11,7 +11,8 @@ from tkinter import ttk
 from clipper import getready
 
 READY, MISSING, NA = "✓ Ready", "Not downloaded", "No NVIDIA card found: subtitles use the processor"
-BLOCKED = "Blocked by Windows' Smart App Control: subtitles use the processor"
+BLOCKED = "Blocked by Windows' Smart App Control: use the GPU speech model below"
+NOT_NEEDED_DML = "Not needed on this PC"
 
 
 class ReadyWindow(tk.Toplevel):
@@ -85,6 +86,8 @@ class ReadyWindow(tk.Toplevel):
 
     @staticmethod
     def _na(key: str) -> str:
+        if key == "gpu_dml":
+            return NOT_NEEDED_DML
         if key == "gpu" and getready.nvidia_gpu():
             return BLOCKED
         return NA

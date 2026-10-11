@@ -57,10 +57,8 @@ jobs:
       - name: Test against faster-whisper
         run: |
           curl -sSL -o jfk.wav https://github.com/ggml-org/whisper.cpp/raw/master/samples/jfk.wav
-          ffmpeg -v error -y -i jfk.wav -f lavfi -t 4 -i anullsrc=r=16000:cl=mono -i jfk.wav \
-            -filter_complex "[0:a][1:a][2:a]concat=n=3:v=0:a=1" -ar 16000 -ac 1 test.wav
           set -o pipefail
-          python packaging/models/test_whisper_onnx.py out/fp32-test test.wav out/whisper-turbo-onnx 2>&1 | tee log.txt || { echo "::error title=test::$(grep -v '^::' log.txt | tail -c 2500 | tr '\n' '|')"; exit 1; }
+          python packaging/models/test_whisper_onnx.py out/fp32-test jfk.wav out/whisper-turbo-onnx 2>&1 | tee log.txt || { echo "::error title=test::$(grep -v '^::' log.txt | tail -c 2500 | tr '\n' '|')"; exit 1; }
 
       - name: Publish
         if: inputs.publish
