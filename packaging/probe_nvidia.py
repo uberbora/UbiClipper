@@ -10,10 +10,10 @@ import tempfile
 import urllib.request
 import zipfile
 
-CHECK = {
+CHECK = {  # noqa
+
     "nvidia-cublas-cu12": "cublas64_12.dll",
     "nvidia-cuda-runtime-cu12": "cudart64_12.dll",
-    "nvidia-cudnn-cu12": "cudnn_ops64_9.dll",
 }
 
 
@@ -46,8 +46,8 @@ class HttpFile:
 def sig(path):
     ps = (f"$s=Get-AuthenticodeSignature '{path}'; "
           "\"$($s.Status) | $($s.SignerCertificate.Subject)\"")
-    return subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                          capture_output=True, text=True).stdout.strip()
+    return (lambda r: (r.stdout + r.stderr).strip()[:200])(subprocess.run(["pwsh", "-NoProfile", "-Command", ps],
+                          capture_output=True, text=True))
 
 
 lines = []

@@ -219,7 +219,7 @@ class Judge:
             import tokenizers
         except Exception as e:
             raise JudgeError(f"The AI judge needs CTranslate2 and tokenizers, which "
-                             f"come with faster-whisper ({e}). Run run_windows.bat.") from e
+                             f"come with faster-whisper ({e}). Reinstall UbiClipper.") from e
         self.tok = tokenizers.Tokenizer.from_file(os.path.join(MODEL_DIR, "tokenizer.json"))
         attempts = ([("cuda", "int8_float16")] if gpu_ok else []) + [("cpu", "int8")]
         last = None
@@ -227,6 +227,10 @@ class Judge:
             try:
                 say(f"Loading the AI judge ({dev.upper()})…")
                 self.gen = ctranslate2.Generator(MODEL_DIR, device=dev, compute_type=ctype)
+                if dev == "cuda":   # cuBLAS loads on first use: test it now
+                    self.gen.generate_batch([self._tokens("<|im_start|>user\nhi<|im_end|>")],
+                                            max_length=1, beam_size=1,
+                                            include_prompt_in_result=False)
                 self.device = dev
                 break
             except Exception as e:   # out of GPU memory, old CTranslate2...
@@ -234,8 +238,8 @@ class Judge:
         else:
             msg = str(last)
             if "qwen3" in msg.lower() or "unsupported" in msg.lower() or "spec" in msg.lower():
-                msg += (" - your CTranslate2 is too old for this model. Run "
-                        "run_windows.bat (it updates it).")
+                msg += (" - your CTranslate2 is too old for this model. Install the "
+                        "latest UbiClipper.")
             raise JudgeError(f"Couldn't load the AI judge: {msg}")
         self._lock = threading.Lock()
 

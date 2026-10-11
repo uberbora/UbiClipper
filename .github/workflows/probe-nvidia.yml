@@ -14,4 +14,4 @@ jobs:
           python-version: "3.12"
       - name: Probe
         shell: pwsh
-        run: python packaging/probe_nvidia.py 14
+        run: python packaging/probe_nvidia.py 8

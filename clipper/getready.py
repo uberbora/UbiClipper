@@ -32,11 +32,14 @@ WHISPER_DEFAULT = "large-v3-turbo"
 Report = Callable[[str, float | None], None]     # (message, fraction 0..1 or None)
 Cancel = Callable[[], bool]
 
-# package, required major version (None = newest), DLL that proves it's there
+# package, required major version, exact version (None = newest), DLL that
+# proves it's there. Pinned to builds whose Windows DLLs are signed by NVIDIA:
+# some newer builds ship unsigned DLLs, which Smart App Control blocks
+# (packaging/probe_nvidia.py checks this on GitHub's Windows machines).
 NVIDIA_PACKAGES = [
-    ("nvidia-cuda-runtime-cu12", None, "cudart64_12.dll"),
-    ("nvidia-cublas-cu12", None, "cublas64_12.dll"),
-    ("nvidia-cudnn-cu12", 9, "cudnn_ops64_9.dll"),
+    ("nvidia-cuda-runtime-cu12", 12, PIN_CUDART, "cudart64_12.dll"),
+    ("nvidia-cublas-cu12", 12, PIN_CUBLAS, "cublas64_12.dll"),
+    ("nvidia-cudnn-cu12", 9, PIN_CUDNN, "cudnn_ops64_9.dll"),
 ]
 
 
@@ -117,11 +120,19 @@ def nvidia_gpu() -> bool:
     return os.path.isfile(os.path.join(win, "System32", "nvidia-smi.exe"))
 
 
+def _have_dll(dll: str) -> bool:
+    """The DLL is there and, with Smart App Control on, signed (else blocked)."""
+    from .transcribe import _nvidia_lib_dirs, pe_signed, smart_app_control_on
+    strict = smart_app_control_on()
+    for d in _nvidia_lib_dirs():
+        p = os.path.join(d, dll)
+        if os.path.isfile(p) and (not strict or pe_signed(p)):
+            return True
+    return False
+
+
 def gpu_libs_ready() -> bool:
-    from .transcribe import _nvidia_lib_dirs
-    dirs = _nvidia_lib_dirs()
-    return all(any(os.path.isfile(os.path.join(d, dll)) for d in dirs)
-               for _, _, dll in NVIDIA_PACKAGES)
+    return all(_have_dll(dll) for _, _, _, dll in NVIDIA_PACKAGES)
 
 
 def status(model: str = WHISPER_DEFAULT) -> dict[str, bool | None]:
@@ -221,8 +232,9 @@ def _version_key(v: str) -> tuple[int, ...] | None:
     return tuple(int(p) for p in v.split("."))
 
 
-def _pick_wheel(package: str, major: int | None) -> dict:
-    """The newest Windows x64 wheel of `package` (optionally of one major version)."""
+def _pick_wheel(package: str, major: int | None, exact: str | None = None) -> dict:
+    """The Windows x64 wheel of `package`: version `exact` when given (and
+    available), otherwise the newest of that major version."""
     req = urllib.request.Request(f"https://pypi.org/pypi/{package}/json",
                                  headers={"User-Agent": "UbiClipper"})
     with urllib.request.urlopen(req, timeout=60) as r:
@@ -231,6 +243,8 @@ def _pick_wheel(package: str, major: int | None) -> dict:
     for ver, files in data.get("releases", {}).items():
         key = _version_key(ver)
         if not key or (major is not None and key[0] != major):
+            continue
+        if exact and ver != exact and exact in data.get("releases", {}):
             continue
         for f in files:
             if (f.get("packagetype") == "bdist_wheel" and f["filename"].endswith("win_amd64.whl")
@@ -302,15 +316,18 @@ def get_gpu_libs(report: Report, cancel: Cancel) -> None:
     dl_dir = os.path.join(NVIDIA_DIR, "_downloads")
     os.makedirs(dl_dir, exist_ok=True)
     report("Looking up the NVIDIA libraries…", None)
-    wheels = [(pkg, _pick_wheel(pkg, major), dll) for pkg, major, dll in NVIDIA_PACKAGES]
+    wheels = [(pkg, _pick_wheel(pkg, major, exact), dll)
+              for pkg, major, exact, dll in NVIDIA_PACKAGES]
     total = sum(w["size"] for _, w, _ in wheels) or 1
     base = 0.0
-    from .transcribe import _nvidia_lib_dirs
     for pkg, w, dll in wheels:
         share = w["size"] / total
-        if any(os.path.isfile(os.path.join(d, dll)) for d in _nvidia_lib_dirs()):
+        if _have_dll(dll):
             base += share
             continue
+        # an older unsigned copy from a previous download goes first
+        sub = pkg.replace("nvidia-", "").replace("-cu12", "").replace("-", "_")
+        shutil.rmtree(os.path.join(NVIDIA_DIR, sub), ignore_errors=True)
         dest = os.path.join(dl_dir, w["filename"])
         label = pkg.replace("nvidia-", "").replace("-cu12", "")
         _download(w["url"], dest, w["size"], (w.get("digests") or {}).get("sha256"),

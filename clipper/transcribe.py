@@ -318,6 +318,49 @@ def _missing_cuda_libs() -> list[str]:
             if not any(os.path.isfile(os.path.join(d, n)) for d in path_dirs if d)]
 
 
+def smart_app_control_on() -> bool:
+    """Windows 11 Smart App Control in "On" mode blocks unsigned DLLs."""
+    if not sys.platform.startswith("win"):
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r"SYSTEM\CurrentControlSet\Control\CI\Policy") as k:
+            return winreg.QueryValueEx(k, "VerifiedAndReputablePolicyState")[0] == 1
+    except OSError:
+        return False
+
+
+def pe_signed(path: str) -> bool:
+    """Does this DLL carry a digital signature? (Reads the PE header only;
+    Windows checks the signature itself when it loads the file.)"""
+    import struct
+    try:
+        with open(path, "rb") as f:
+            head = f.read(4096)
+        pe = struct.unpack_from("<I", head, 0x3C)[0]
+        magic = struct.unpack_from("<H", head, pe + 24)[0]
+        dirs = pe + 24 + (112 if magic == 0x20B else 96)
+        _, size = struct.unpack_from("<II", head, dirs + 4 * 8)
+        return size > 0
+    except (OSError, struct.error):
+        return False
+
+
+def _unsigned_cuda_libs() -> list[str]:
+    names = ("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudnn_ops64_9.dll")
+    bad = []
+    for d in _nvidia_lib_dirs():
+        for n in names:
+            p = os.path.join(d, n)
+            if os.path.isfile(p) and not pe_signed(p):
+                bad.append(n)
+    return bad
+
+
+_GPU_BROKEN: list[str] = []      # set when the GPU failed for real this session
+
+
 def gpu_status() -> tuple[bool, str]:
     """(usable, human-readable explanation)."""
     _prepare_cuda()
@@ -329,6 +372,14 @@ def gpu_status() -> tuple[bool, str]:
     if count == 0:
         return False, ("No CUDA GPU visible. If you have an NVIDIA card, update "
                        "its driver.")
+    if _GPU_BROKEN:
+        return False, _GPU_BROKEN[0]
+    if smart_app_control_on():
+        unsigned = _unsigned_cuda_libs()
+        if unsigned:
+            return False, ("Smart App Control blocks the unsigned NVIDIA files ("
+                           + ", ".join(sorted(set(unsigned))) + "). Settings → All AI "
+                           "downloads & GPU speed-up downloads signed ones.")
     missing = _missing_cuda_libs()
     if missing:
         return False, ("NVIDIA GPU found, but CUDA libraries are missing ("
@@ -409,12 +460,28 @@ class Transcriber:
             try:
                 self.model = fw.WhisperModel(opts.model, device=device,
                                              compute_type=compute)
+                if device == "cuda":
+                    self._warm_up()      # CUDA libraries load on first use
                 self.device = device
                 self.device_note = gpu_why if device == "cpu" else "GPU"
                 return
             except Exception as e:  # e.g. driver too old -> fall back to CPU
                 last_err = e
+                if device == "cuda":
+                    gpu_why = f"GPU didn't work ({str(e)[:160]}), using the CPU"
+                    _GPU_BROKEN[:] = [gpu_why]
+                    self.model = None
         raise RuntimeError(f"Could not load Whisper model '{opts.model}': {last_err}")
+
+    def _warm_up(self) -> None:
+        """Transcribe half a second of quiet noise so a missing or blocked
+        cuBLAS/cuDNN shows up now (and we fall back to the CPU) instead of
+        in the middle of an export."""
+        noise = (np.random.default_rng(0).standard_normal(SAMPLE_RATE // 2) * 1e-3)
+        segs, _ = self.model.transcribe(noise.astype(np.float32), language="en",
+                                        beam_size=1, vad_filter=False,
+                                        condition_on_previous_text=False)
+        list(segs)
 
     def transcribe_file(self, path: str, start: float | None = None,
                         duration: float | None = None, track: int = 0) -> Transcript:
