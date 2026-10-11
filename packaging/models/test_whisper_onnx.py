@@ -15,12 +15,14 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 from faster_whisper import WhisperModel  # noqa: E402
-from faster_whisper.audio import decode_audio  # noqa: E402
 
 from clipper.whisper_onnx import OnnxWhisperModel  # noqa: E402
 
 audio_path = sys.argv[2]
-one = decode_audio(audio_path)
+import wave  # noqa: E402
+with wave.open(audio_path) as w:          # 16 kHz mono 16-bit (jfk.wav)
+    assert w.getframerate() == 16000 and w.getnchannels() == 1
+    one = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
 # speech, 4 s of silence, speech again: tests the voice filter and timing
 audio = np.concatenate([one, np.zeros(4 * 16000, np.float32), one])
 OPTS = dict(word_timestamps=True, vad_filter=True, beam_size=5,
