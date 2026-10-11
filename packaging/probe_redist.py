@@ -9,8 +9,32 @@ import tempfile
 import urllib.request
 import zipfile
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from probe_nvidia import HttpFile  # noqa: E402
+class HttpFile:
+    def __init__(self, url, size):
+        self.url, self.size, self.pos = url, size, 0
+
+    def seekable(self):
+        return True
+
+    def tell(self):
+        return self.pos
+
+    def seek(self, off, whence=0):
+        self.pos = off if whence == 0 else (self.pos + off if whence == 1 else self.size + off)
+        return self.pos
+
+    def read(self, n=-1):
+        if n < 0:
+            n = self.size - self.pos
+        if n == 0:
+            return b""
+        end = min(self.size, self.pos + n) - 1
+        req = urllib.request.Request(self.url, headers={"Range": f"bytes={self.pos}-{end}"})
+        data = urllib.request.urlopen(req, timeout=120).read()
+        self.pos += len(data)
+        return data
+
+
 
 BASE = "https://developer.download.nvidia.com/compute/cuda/redist/"
 WANT = {"libcublas": ["cublas64_12.dll", "cublasLt64_12.dll"], "cuda_cudart": ["cudart64_12.dll"]}
