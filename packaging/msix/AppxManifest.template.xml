@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Microsoft Store package. build_windows.ps1 fills in {{...}}.
      Identity values come from Partner Center (Product identity page) and are
-     kept in the repository's Actions variables STORE_IDENTITY_NAME,
-     STORE_PUBLISHER and STORE_PUBLISHER_NAME. The Store signs the package. -->
+     kept in packaging/msix/store_identity.json (Name, Publisher,
+     PublisherDisplayName). The Store signs the package. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"

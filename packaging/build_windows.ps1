@@ -119,6 +119,13 @@ if (-not $NoInstaller) {
 
 if (-not $NoMsix) {
     Write-Host "== Microsoft Store package (MSIX)"
+    # Product identity from Partner Center, kept in the repo (not secret)
+    $IdFile = Join-Path $PSScriptRoot "msix\store_identity.json"
+    if ($MsixName -eq "UbiClipper.Test" -and (Test-Path $IdFile)) {
+        $Id = Get-Content $IdFile -Raw | ConvertFrom-Json
+        $MsixName, $MsixPublisher, $MsixPublisherName = $Id.Name, $Id.Publisher, $Id.PublisherDisplayName
+        Write-Host "   Store identity: $MsixName / $MsixPublisher"
+    }
     $Kits = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
     $MakeAppx = Get-ChildItem $Kits -Recurse -Filter makeappx.exe -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -match "\\x64\\" } | Sort-Object FullName -Descending | Select-Object -First 1

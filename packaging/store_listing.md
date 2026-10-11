@@ -83,5 +83,6 @@ tab with the subtitle placer, and a finished clip.
 
 Download **ubiclipper-windows** from the latest successful run of *Build Windows
 installer* (Actions tab) and upload the `.msix` inside. It is built with the
-Product identity values saved as repository variables `STORE_IDENTITY_NAME`,
-`STORE_PUBLISHER` and `STORE_PUBLISHER_NAME`.
+Product identity values in `packaging/msix/store_identity.json`
+(`Name`, `Publisher`, `PublisherDisplayName` from Partner Center → Product
+identity).

@@ -43,7 +43,7 @@ jobs:
         shell: pwsh
         run: |
           $failed = $false
-          try { ./packaging/build_windows.ps1 -MsixName "${{ vars.STORE_IDENTITY_NAME || 'UbiClipper.Test' }}" -MsixPublisher "${{ vars.STORE_PUBLISHER || 'CN=UbiClipper Test' }}" -MsixPublisherName "${{ vars.STORE_PUBLISHER_NAME || 'uberbora' }}" *>&1 | Tee-Object -FilePath build.log }
+          try { ./packaging/build_windows.ps1 *>&1 | Tee-Object -FilePath build.log }
           catch { "ERROR: $_" | Tee-Object -FilePath build.log -Append; $failed = $true }
           if ($failed) {
             # the log tail as an annotation, readable through the API
