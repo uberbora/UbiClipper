@@ -43,7 +43,7 @@ jobs:
         shell: pwsh
         run: |
           $failed = $false
-          try { ./packaging/build_windows.ps1 *>&1 | Tee-Object -FilePath build.log }
+          try { ./packaging/build_windows.ps1 -MsixName "${{ vars.STORE_IDENTITY_NAME || 'UbiClipper.Test' }}" -MsixPublisher "${{ vars.STORE_PUBLISHER || 'CN=UbiClipper Test' }}" -MsixPublisherName "${{ vars.STORE_PUBLISHER_NAME || 'uberbora' }}" *>&1 | Tee-Object -FilePath build.log }
           catch { "ERROR: $_" | Tee-Object -FilePath build.log -Append; $failed = $true }
           if ($failed) {
             # the log tail as an annotation, readable through the API
@@ -94,6 +94,42 @@ jobs:
           Write-Host "Install / start / uninstall OK"
           Stop-Transcript | Out-Null
 
+      - name: Store package (test-signed install and start)
+        shell: pwsh
+        run: |
+          trap { Write-Host "::error title=MSIX test failed::$_"; exit 1 }
+          $msix = (Get-ChildItem dist\*.msix).FullName
+          $copy = "$env:RUNNER_TEMP\test.msix"
+          Copy-Item $msix $copy
+          [xml]$m = (& tar.exe -xOf $copy AppxManifest.xml)
+          $pub = $m.Package.Identity.Publisher
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $pub -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddDays(2) -TextExtension @("2.5.29.19={text}")
+          $pfx = "$env:RUNNER_TEMP\test.pfx"
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password (ConvertTo-SecureString "x" -AsPlainText -Force) | Out-Null
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\LocalMachine\TrustedPeople -Password (ConvertTo-SecureString "x" -AsPlainText -Force) | Out-Null
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match "\\x64\\" } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          & $signtool sign /fd SHA256 /f $pfx /p x $copy
+          if ($LASTEXITCODE) { throw "signtool failed" }
+          Add-AppxPackage $copy
+          $pkg = Get-AppxPackage -Name $m.Package.Identity.Name
+          if (-not $pkg) { throw "not installed" }
+          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!UbiClipper"
+          Start-Sleep 35
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $bmp.Save("shots\store_start.png")
+          $running = Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "*WindowsApps*" }
+          $log = "$env:USERPROFILE\.ubiclipper\logs\ubiclipper.log"
+          if (Test-Path $log) { Get-Content $log -Tail 30 }
+          if (-not $running) { throw "the Store app is not running after 35 s" }
+          if ((Test-Path $log) -and (Select-String -Path $log -Pattern "Traceback" -Quiet)) { throw "errors in the log" }
+          $running | Stop-Process -Force
+          Remove-AppxPackage $pkg.PackageFullName
+          Write-Host "::notice title=Store package::installs and starts ($($pkg.PackageFullName))"
+
       - name: Share screenshots and test log (ci-shots branch)
         if: always()
         shell: pwsh
@@ -124,6 +160,7 @@ jobs:
           path: |
             dist/*.exe
             dist/*.zip
+            dist/*.msix
             shots/
             install.log
             build.log

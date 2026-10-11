@@ -11,7 +11,12 @@
 param(
     [string]$Python = "python",
     [string]$Out = "dist",
-    [switch]$NoInstaller
+    [switch]$NoInstaller,
+    [switch]$NoMsix,
+    # Microsoft Store identity (Partner Center > Product identity); test values otherwise
+    [string]$MsixName = "UbiClipper.Test",
+    [string]$MsixPublisher = "CN=UbiClipper Test",
+    [string]$MsixPublisherName = "uberbora"
 )
 
 $ErrorActionPreference = "Stop"
@@ -110,6 +115,28 @@ if (-not $NoInstaller) {
     if (-not $Iscc) { throw "Inno Setup 6 not found (choco install innosetup)" }
     & $Iscc /Q "/DAppVersion=$Version" "/DStageDir=$(Resolve-Path $Stage)" "/DOutDir=$(Resolve-Path $Out)" (Join-Path $PSScriptRoot "ubiclipper.iss")
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+}
+
+if (-not $NoMsix) {
+    Write-Host "== Microsoft Store package (MSIX)"
+    $Kits = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+    $MakeAppx = Get-ChildItem $Kits -Recurse -Filter makeappx.exe -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match "\\x64\\" } | Sort-Object FullName -Descending | Select-Object -First 1
+    if (-not $MakeAppx) { throw "makeappx.exe not found (Windows SDK)" }
+    $MsixDir = Join-Path $Out "msix"
+    if (Test-Path $MsixDir) { Remove-Item -Recurse -Force $MsixDir }
+    robocopy $Stage $MsixDir /E /NFL /NDL /NJH /NJS /NP /XF "Start UbiClipper.bat" | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
+    Copy-Item (Join-Path $PSScriptRoot "msix\Assets") (Join-Path $MsixDir "Assets") -Recurse
+    $V4 = (($Version -split "\.") + @("0", "0", "0"))[0..2] -join "."
+    $Manifest = (Get-Content (Join-Path $PSScriptRoot "msix\AppxManifest.template.xml") -Raw).
+        Replace("{{NAME}}", $MsixName).Replace("{{PUBLISHER}}", [Security.SecurityElement]::Escape($MsixPublisher)).
+        Replace("{{PUBLISHER_NAME}}", [Security.SecurityElement]::Escape($MsixPublisherName)).Replace("{{VERSION}}", "$V4.0")
+    Set-Content (Join-Path $MsixDir "AppxManifest.xml") $Manifest -Encoding utf8
+    $Msix = Join-Path $Out "UbiClipper-$Version.msix"
+    & $MakeAppx.FullName pack /o /h SHA256 /d $MsixDir /p $Msix | Out-Null
+    if ($LASTEXITCODE -ne 0) { & $MakeAppx.FullName pack /o /h SHA256 /d $MsixDir /p $Msix; throw "makeappx failed" }
+    Remove-Item -Recurse -Force $MsixDir
 }
 
 Get-ChildItem $Out -File | ForEach-Object { "{0,-45} {1,8:N0} MB" -f $_.Name, ($_.Length / 1MB) }

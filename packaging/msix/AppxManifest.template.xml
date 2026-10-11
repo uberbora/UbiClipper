@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Microsoft Store package. build_windows.ps1 fills in {{...}}.
+     Identity values come from Partner Center (Product identity page) and are
+     kept in the repository's Actions variables STORE_IDENTITY_NAME,
+     STORE_PUBLISHER and STORE_PUBLISHER_NAME. The Store signs the package. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap10 rescap">
+
+  <Identity Name="{{NAME}}" Publisher="{{PUBLISHER}}" Version="{{VERSION}}" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>UbiClipper</DisplayName>
+    <PublisherDisplayName>{{PUBLISHER_NAME}}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="tr-tr" />
+  </Resources>
+
+  <Applications>
+    <!-- The official python.org pythonw.exe starts app.py next to it; the
+         package folder is found from the interpreter's own location. -->
+    <Application Id="UbiClipper" Executable="python\pythonw.exe" EntryPoint="Windows.FullTrustApplication"
+      uap10:Parameters="-c &quot;import os,sys,runpy;d=os.path.dirname(os.path.dirname(sys.executable));sys.path.insert(0,d);os.chdir(d);sys.argv=[os.path.join(d,'app.py')];runpy.run_path(sys.argv[0],run_name='__main__')&quot;">
+      <uap:VisualElements DisplayName="UbiClipper"
+        Description="Finds the funny moments in your stream and turns them into subtitled 9:16 clips."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

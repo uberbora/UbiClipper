@@ -43,6 +43,19 @@ def installed() -> bool:
     return os.path.isfile(os.path.join(APP_DIR, "ubiclipper.build"))
 
 
+def packaged() -> bool:
+    """Running as the Microsoft Store (MSIX) app?"""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        n = ctypes.c_uint32(0)
+        # APPMODEL_ERROR_NO_PACKAGE (15700) when not packaged
+        return ctypes.windll.kernel32.GetCurrentPackageFullName(ctypes.byref(n), None) != 15700
+    except Exception:
+        return False
+
+
 def _log_to_file() -> None:
     if sys.stdout is not None and sys.stderr is not None:
         return
@@ -88,11 +101,12 @@ def setup() -> None:
         no_console = os.path.basename(sys.executable).lower().startswith("pythonw")
         if no_console:
             _hide_child_consoles()
-        try:
-            import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
-        except Exception:
-            pass
+        if not packaged():   # a Store app already has its own taskbar identity
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+            except Exception:
+                pass
 
 
 def set_window_icon(root) -> None:
