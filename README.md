@@ -465,3 +465,26 @@ packaging/       Windows build: build_windows.ps1, Inno Setup script
 
 Adding a detector = subclass `Detector`, implement `compute(ctx)` returning a
 0..1 array (one value per 0.5 s), add it to `DEFAULT_DETECTORS`.
+
+## Licence
+
+UbiClipper is free software under the **GNU General Public License v3.0**
+(`LICENSE`): you can use, study, share and change it, and copies and changed
+versions must stay free and open source under the same licence. Third-party
+parts and their licences are listed in `THIRD_PARTY.md`.
+
+## Code signing policy
+
+Windows releases are built from this repository by GitHub Actions
+(`.github/workflows/build.yml`); nothing is built or signed by hand.
+Free code signing by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org) (application in progress; until
+then releases are unsigned).
+
+- Committers and reviewers: [uberbora](https://github.com/uberbora)
+- Approvers (each signed release is approved by hand): [uberbora](https://github.com/uberbora)
+
+Privacy: UbiClipper does not send any information to other networked systems
+unless the user asks for it (downloading the AI models, opening a link,
+posting a clip to an account they connected). Details:
+[privacy policy](https://uberbora.github.io/ubiclipper/privacy/).
