@@ -98,6 +98,7 @@ jobs:
         shell: pwsh
         run: |
           trap { Write-Host "::error title=MSIX test failed::$_"; exit 1 }
+          Import-Module Appx -UseWindowsPowerShell -WarningAction SilentlyContinue
           $msix = (Get-ChildItem dist\*.msix).FullName
           $copy = "$env:RUNNER_TEMP\test.msix"
           Copy-Item $msix $copy
