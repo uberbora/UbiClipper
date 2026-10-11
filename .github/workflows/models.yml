@@ -1,0 +1,82 @@
+name: Build GPU (DirectML) speech model
+
+# Exports Whisper large-v3-turbo to ONNX (float16) for UbiClipper's DirectML
+# engine, checks it against faster-whisper, and (with "publish") attaches the
+# files to a GitHub release that the app downloads from.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the model files as a release"
+        type: boolean
+        default: false
+      tag:
+        description: "Release tag for the model files"
+        default: "model-whisper-turbo-onnx-1"
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -q openai-whisper onnx onnxconverter-common onnxruntime faster-whisper huggingface_hub
+
+      - name: Export
+        run: |
+          set -o pipefail
+          fail() { echo "::error title=$1::$(tail -c 2500 log.txt | tr '\n' '|')"; exit 1; }
+          python packaging/models/export_whisper_onnx.py --model turbo --out out/whisper-turbo-onnx 2>&1 | tee log.txt || fail "fp16 export"
+          python packaging/models/export_whisper_onnx.py --model turbo --out out/fp32-test --fp32 2>&1 | tee log.txt || fail "fp32 export"
+          python - <<'PY'
+          from huggingface_hub import hf_hub_download
+          import shutil
+          for d in ("out/whisper-turbo-onnx", "out/fp32-test"):
+              for f in ("tokenizer.json", "preprocessor_config.json"):
+                  shutil.copy(hf_hub_download("openai/whisper-large-v3-turbo", f), f"{d}/{f}")
+          PY
+          ls -la out/*
+
+      - name: Test against faster-whisper
+        run: |
+          curl -sSL -o jfk.wav https://github.com/ggml-org/whisper.cpp/raw/master/samples/jfk.wav
+          ffmpeg -v error -y -i jfk.wav -f lavfi -t 4 -i anullsrc=r=16000:cl=mono -i jfk.wav \
+            -filter_complex "[0:a][1:a][2:a]concat=n=3:v=0:a=1" -ar 16000 -ac 1 test.wav
+          set -o pipefail
+          python packaging/models/test_whisper_onnx.py out/fp32-test test.wav out/whisper-turbo-onnx 2>&1 | tee log.txt || { echo "::error title=test::$(grep -v '^::' log.txt | tail -c 2500 | tr '\n' '|')"; exit 1; }
+
+      - name: Publish
+        if: inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: "Model: Whisper large-v3-turbo for DirectML (ONNX, float16)"
+          body: |
+            Speech-to-text model files for UbiClipper's GPU engine (DirectML: NVIDIA, AMD and Intel Arc).
+            Exported from OpenAI's Whisper large-v3-turbo (MIT licence) by `packaging/models/export_whisper_onnx.py`.
+            UbiClipper downloads these by itself; there's nothing to do with them by hand.
+          prerelease: true
+          make_latest: false
+          files: |
+            out/whisper-turbo-onnx/encoder.onnx
+            out/whisper-turbo-onnx/decoder.onnx
+            out/whisper-turbo-onnx/config.json
+            out/whisper-turbo-onnx/tokenizer.json
+            out/whisper-turbo-onnx/preprocessor_config.json
