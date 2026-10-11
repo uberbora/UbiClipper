@@ -127,7 +127,7 @@ if (-not $NoMsix) {
     if (Test-Path $MsixDir) { Remove-Item -Recurse -Force $MsixDir }
     robocopy $Stage $MsixDir /E /NFL /NDL /NJH /NJS /NP /XF "Start UbiClipper.bat" | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
-    Copy-Item (Join-Path $PSScriptRoot "msix\Assets") (Join-Path $MsixDir "Assets") -Recurse
+    Copy-Item (Join-Path $PSScriptRoot "msix\Assets\*") (Join-Path $MsixDir "assets") -Force   # next to the app's own icons
     $V4 = (($Version -split "\.") + @("0", "0", "0"))[0..2] -join "."
     $Manifest = (Get-Content (Join-Path $PSScriptRoot "msix\AppxManifest.template.xml") -Raw).
         Replace("{{NAME}}", $MsixName).Replace("{{PUBLISHER}}", [Security.SecurityElement]::Escape($MsixPublisher)).
