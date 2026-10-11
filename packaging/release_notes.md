@@ -1,19 +1,9 @@
 ## Install
 
-- **UbiClipper-Setup-….exe**: the normal installer (no admin rights needed).
-  Windows may say "Windows protected your PC" because the app isn't code-signed
-  yet: click **More info → Run anyway**.
-- **UbiClipper-…-portable.zip**: no installing. Unzip anywhere and double-click
-  **Start UbiClipper.bat**. Use this if Smart App Control blocks the installer.
+- **UbiClipper-x.y.z-portable.zip** (works with Smart App Control): unzip anywhere and double-click **Start UbiClipper.bat**.
+- **UbiClipper-Setup-x.y.z.exe**: the normal installer. Until the app is code-signed, Windows says "Windows protected your PC": click **More info → Run anyway**. Smart App Control blocks it completely; use the zip.
 
-On the first start, the **Get UbiClipper ready** window downloads the AI models
-once (about 6 GB with the AI judge) and, on NVIDIA PCs, the GPU speed-up.
-Everything runs on your own PC, for free; nothing is uploaded unless you post.
+## What changed
 
-## New in this version
-
-- Windows installer and portable version: Python, FFmpeg and everything else included.
-- "Get UbiClipper ready" window: downloads the AI models and the NVIDIA GPU
-  speed-up with progress, resumes stopped downloads.
-- No more command windows; errors go to a log file for bug reports.
-- New app icon.
+- No more "cublas64_12.dll cannot be loaded" error. NVIDIA doesn't sign its GPU files, so on PCs with Smart App Control Windows may block them. UbiClipper now checks this once and quietly uses the processor instead.
+- The portable version removes Windows' "downloaded from the internet" mark on its first start, so you no longer need to unblock the zip by hand.
