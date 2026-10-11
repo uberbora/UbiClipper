@@ -1,0 +1,17 @@
+name: Check NVIDIA DLL signatures
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Probe
+        shell: pwsh
+        run: python packaging/probe_nvidia.py 14
