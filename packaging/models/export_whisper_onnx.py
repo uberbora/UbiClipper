@@ -124,6 +124,12 @@ def main() -> None:
     os.makedirs(tmp, exist_ok=True)
 
     model = whisper.load_model(a.model, device="cpu").eval()
+    # openai-whisper's LayerNorm runs in float32 even in a float16 model (it
+    # casts around the op); plain LayerNorm keeps the graph convertible.
+    import types
+    for mod in model.modules():
+        if isinstance(mod, nn.LayerNorm):
+            mod.forward = types.MethodType(nn.LayerNorm.forward, mod)
     d = model.dims
     enc, dec = Encoder(model).eval(), Decoder(model).eval()
     L, D = d.n_text_layer, d.n_text_state
