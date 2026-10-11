@@ -87,7 +87,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">UbiClipper · v1.8</div>
+    <div class="eyebrow">UbiClipper · v1.8.1</div>
     <h1>UbiClipper Roadmap</h1>
     <p class="lede">Everything we're adding, in the order we'll build it. Each phase leaves the app in a better, shippable state, so nothing waits on the whole list.</p>
   </header>
@@ -125,6 +125,7 @@ const PHASES = [
   ]},
   { title: "Ready for other people", why: "Decides whether strangers can install and keep using the app at all.", items: [
     { t: "Windows installer", d: "UbiClipper-Setup.exe and a portable zip with Python and FFmpeg inside, a first-start window that downloads the AI models and the NVIDIA speed-up, built and test-installed on GitHub for every version. Shipped in v1.8.", s: "L", st: "done" },
+    { t: "GPU speed on any graphics card", d: "Subtitles and the AI judge on NVIDIA, AMD and Intel Arc cards through Microsoft's DirectML, whose files are signed by Microsoft, so Smart App Control doesn't block them like NVIDIA's unsigned CUDA files.", s: "L", st: "next" },
     { t: "Code signing", d: "So Smart App Control doesn't block the app. Apply for free signing for open-source projects (SignPath Foundation, to be confirmed).", s: "M", st: "next", dep: "Windows installer" },
     { t: "Auto-updates", d: "A \"new version available\" button that updates in place.", s: "M", st: "plan", dep: "Windows installer" },
     { t: "First-run wizard", d: "Pick the app language and the language you stream in, mark your webcam, run the setup check. Done.", s: "S", st: "plan" },
