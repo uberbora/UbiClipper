@@ -144,18 +144,22 @@ class OnnxEngine:
         k, v = self.enc.run(None, {"mel": np.ascontiguousarray(x.astype(self.mel_dtype))})
         return EncoderOutput(k, v)
 
-    def _audio(self, enc: EncoderOutput, b: int):
+    def _audio(self, enc: EncoderOutput, b: int) -> dict:
         """Cross-attention keys/values of batch item b (batch 1; it broadcasts
-        over beams), uploaded to the graphics card once."""
+        over beams): as numpy, and uploaded to the graphics card once."""
         cache = enc.__dict__.setdefault("_dev", {})
         if b not in cache:
             ck = np.ascontiguousarray(enc.cross_k[:, b:b + 1].astype(self.dtype))
             cv = np.ascontiguousarray(enc.cross_v[:, b:b + 1].astype(self.dtype))
+            entry = {"np": (ck, cv), "dev": None}
             if self.bind:
-                import onnxruntime as ort
-                ck = ort.OrtValue.ortvalue_from_numpy(ck, self.bind, 0)
-                cv = ort.OrtValue.ortvalue_from_numpy(cv, self.bind, 0)
-            cache[b] = (ck, cv)
+                try:
+                    import onnxruntime as ort
+                    entry["dev"] = (ort.OrtValue.ortvalue_from_numpy(ck, self.bind, 0),
+                                    ort.OrtValue.ortvalue_from_numpy(cv, self.bind, 0))
+                except Exception:
+                    self.bind = None
+            cache[b] = entry
         return cache[b]
 
     # ---------------------------------------------------------------- decoder
@@ -166,14 +170,22 @@ class OnnxEngine:
     def _step(self, tokens, k, v, audio, offset, beam):
         """One decoder call. k/v: caches from the previous call (any batch);
         beam: which previous row each new row continues."""
-        ck, cv = audio
         feeds_small = {"tokens": np.ascontiguousarray(tokens, dtype=np.int64),
                        "offset": np.array([offset], dtype=np.int64),
                        "beam": np.ascontiguousarray(beam, dtype=np.int64)}
-        if not self.bind:
-            logits, k, v, qk = self.dec.run(None, dict(
-                feeds_small, self_k=k, self_v=v, cross_k=ck, cross_v=cv))
-            return logits.astype(np.float32), k, v, qk
+        if self.bind and audio["dev"] is not None:
+            try:
+                return self._step_bound(feeds_small, k, v, *audio["dev"])
+            except Exception:
+                if not isinstance(k, np.ndarray):
+                    raise          # mid-decode: can't switch with caches on the GPU
+                self.bind = None   # this ONNX Runtime can't bind here: plain calls
+        ck, cv = audio["np"]
+        logits, k, v, qk = self.dec.run(None, dict(
+            feeds_small, self_k=k, self_v=v, cross_k=ck, cross_v=cv))
+        return logits.astype(np.float32), k, v, qk
+
+    def _step_bound(self, feeds_small, k, v, ck, cv):
         io = self.dec.io_binding()
         for name, val in feeds_small.items():
             io.bind_cpu_input(name, val)

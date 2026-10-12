@@ -84,8 +84,13 @@ def main() -> int:
     line(OK if tk_ else WARN, f"tokenizers {getattr(tk_, '__version__', '')} (AI judge)"
          if tk_ else f"tokenizers: {err} (AI judge unavailable)")
     ort, err = try_import("onnxruntime")
-    line(OK if ort else BAD,
-         f"onnxruntime {getattr(ort, '__version__', '')} (voice detection)" if ort else f"onnxruntime: {err}")
+    if ort:
+        provs = ort.get_available_providers()
+        dml = "DmlExecutionProvider" in provs
+        line(OK, f"onnxruntime {ort.__version__} (voice detection"
+                 + (", DirectML GPU engine)" if dml else ")"))
+    else:
+        line(BAD, f"onnxruntime: {err}")
 
     from clipper.transcribe import gpu_status, import_whisper, WhisperMissing
     try:
@@ -103,7 +108,19 @@ def main() -> int:
     else:
         line(WARN, "nvidia-smi not found (no NVIDIA GPU or driver)")
     usable, why = gpu_status()
-    line(OK if usable else WARN, f"GPU subtitles: {why}")
+    line(OK if usable else WARN, f"GPU subtitles (NVIDIA CUDA): {why}")
+    try:
+        from clipper import whisper_onnx as wo
+        if wo.directml_installed():
+            if not wo.model_ready():
+                line(WARN, "GPU subtitles (DirectML): model not downloaded "
+                           "(Settings → All AI downloads)")
+            else:
+                ok, msg = wo.dml_status(cached_only=True)
+                line(OK if ok else WARN, "GPU subtitles (DirectML): "
+                     + ("ready" if ok else msg) + (f" ({msg})" if ok and msg else ""))
+    except Exception as e:  # noqa: BLE001
+        line(WARN, f"GPU subtitles (DirectML): {e}")
 
     # ---------------------------------------------------------------- models
     from clipper import getready

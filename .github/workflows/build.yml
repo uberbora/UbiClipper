@@ -69,6 +69,9 @@ jobs:
           & "$app\python\python.exe" "$app\check_setup.py"
           if ($LASTEXITCODE) { throw "check_setup failed" }
 
+          & "$app\python\python.exe" -c "import sys; sys.path.insert(0, r'$app'); from clipper import whisper_onnx as w; ok = w.directml_installed(); print('DirectML engine in the build:', ok); sys.exit(0 if ok else 1)"
+          if ($LASTEXITCODE) { throw "DirectML engine missing" }
+
           & "$app\python\python.exe" "packaging\test_gpu_download.py"
           if ($LASTEXITCODE) { throw "GPU download test failed" }
 

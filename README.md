@@ -1,4 +1,4 @@
-# UbiClipper v1.8
+# UbiClipper v1.9
 
 Pick a video (6 minutes to 6+ hours), let it find the moments where something
 happens — laughter, screams, sudden outbursts, loud reactions — and get
@@ -390,6 +390,16 @@ start-up. UbiClipper doesn't need it (FFmpeg decodes the audio), so since
 v0.3 it skips PyAV when Windows blocks it. If subtitles still fail, run
 `check_setup.bat`; it shows exactly which part won't load.
 
+**GPU on any graphics card (DirectML)**
+Since v1.9 the Windows app can run speech-to-text on NVIDIA, AMD and Intel Arc
+cards through Microsoft's DirectML. Download **GPU speech model (any graphics
+card)** in **Settings → All AI downloads & GPU speed-up…** (1.7 GB). UbiClipper
+tests the card once in the background and remembers the result; if it fails,
+subtitles keep using the processor. It's used automatically when NVIDIA's own
+CUDA speed-up isn't available (no NVIDIA card, or Windows' Smart App Control
+blocks NVIDIA's unsigned files), with the *turbo* speech model. The AI judge
+still runs on the processor there (GPU support for it is next).
+
 **Subtitles are on CPU even though I have an NVIDIA GPU**
 Open **Settings → All AI downloads & GPU speed-up…** and download the GPU
 speed-up (CUDA 12 + cuDNN 9 from NVIDIA's official packages). From source:
@@ -441,6 +451,8 @@ style_editor.py  subtitle style window with live preview
 ui_help.py       the ⓘ hover help texts
 ready_window.py  the "Get UbiClipper ready" downloads window
 clipper/getready.py   what gets downloaded after installing (models, NVIDIA libs)
+clipper/whisper_onnx.py  Whisper on ONNX Runtime + DirectML (any graphics card)
+packaging/models/  export + check of the DirectML speech model (GitHub Actions)
 clipper/bootstrap.py  start-up fixes for the installed app (FFmpeg, no consoles, log)
 packaging/       Windows build: build_windows.ps1, Inno Setup script
 .github/workflows/build.yml  builds, test-installs and releases the installer
