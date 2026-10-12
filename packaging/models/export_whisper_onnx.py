@@ -124,6 +124,8 @@ def main() -> None:
     os.makedirs(tmp, exist_ok=True)
 
     model = whisper.load_model(a.model, device="cpu").eval()
+    if not a.fp32:
+        model = model.half()     # export natively in float16 (no converter)
     # openai-whisper's LayerNorm runs in float32 even in a float16 model (it
     # casts around the op); plain LayerNorm keeps the graph convertible.
     import types
@@ -134,7 +136,8 @@ def main() -> None:
     enc, dec = Encoder(model).eval(), Decoder(model).eval()
     L, D = d.n_text_layer, d.n_text_state
 
-    mel = torch.zeros(1, d.n_mels, 3000)
+    dt = torch.float32 if a.fp32 else torch.float16
+    mel = torch.zeros(1, d.n_mels, 3000, dtype=dt)
     with torch.no_grad():
         ck, cv = enc(mel)
         torch.onnx.export(enc, (mel,), os.path.join(tmp, "encoder.onnx"),
@@ -142,8 +145,8 @@ def main() -> None:
                           dynamic_axes={"mel": {0: "b"}, "cross_k": {1: "b"}, "cross_v": {1: "b"}},
                           opset_version=17, dynamo=False)
         tokens = torch.tensor([[50258, 50259, 50360]], dtype=torch.long)
-        sk = torch.zeros(L, 1, d.n_text_ctx, D)
-        sv = torch.zeros(L, 1, d.n_text_ctx, D)
+        sk = torch.zeros(L, 1, d.n_text_ctx, D, dtype=dt)
+        sv = torch.zeros(L, 1, d.n_text_ctx, D, dtype=dt)
         off = torch.tensor([0], dtype=torch.long)
         beam = torch.tensor([0], dtype=torch.long)
         torch.onnx.export(dec, (tokens, sk, sv, ck, cv, off, beam), os.path.join(tmp, "decoder.onnx"),
@@ -158,14 +161,14 @@ def main() -> None:
                                         "qk": {0: "b", 2: "t"}},
                           opset_version=17, dynamo=False)
 
+    import onnx
     for name in ("encoder.onnx", "decoder.onnx"):
+        m = onnx.load(os.path.join(tmp, name), load_external_data=True)
         if a.fp32:      # > 2 GB: weights go into a side file
-            import onnx
-            m = onnx.load(os.path.join(tmp, name), load_external_data=True)
             onnx.save(m, os.path.join(a.out, name), save_as_external_data=True,
                       all_tensors_to_one_file=True, location=name + ".data")
         else:
-            to_fp16(os.path.join(tmp, name), os.path.join(a.out, name))
+            onnx.save(m, os.path.join(a.out, name), save_as_external_data=False)
 
     cfg = dict(n_mels=d.n_mels, n_text_ctx=d.n_text_ctx, n_text_state=D,
                n_text_layer=L, n_text_head=d.n_text_head, n_audio_ctx=d.n_audio_ctx,
