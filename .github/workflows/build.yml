@@ -157,7 +157,12 @@ jobs:
           git push -qf origin ci-shots
           Pop-Location
 
-      - uses: actions/upload-artifact@v5
+      # Artifacts count against the account's storage quota, so they expire
+      # quickly. Installers: 7 days (enough to test on a real PC and to upload
+      # the .msix to the Store; rerun the workflow for a fresh copy). Logs and
+      # screenshots: 3 days (screenshots and test.log are also on ci-shots).
+      - name: Upload installers
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: ubiclipper-windows
@@ -165,11 +170,21 @@ jobs:
             dist/*.exe
             dist/*.zip
             dist/*.msix
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload logs and screenshots
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: ubiclipper-logs
+          path: |
             shots/
             install.log
             build.log
             test.log
           if-no-files-found: warn
+          retention-days: 3
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release

@@ -2,6 +2,22 @@
 
 Newest first. One entry per working session. Full project state: `handoff.md`.
 
+## 2026-10-15 – Shorter CI artifact retention
+
+### What we changed
+- `.github/workflows/build.yml`: the single upload is split into two artifacts with expiry dates: `ubiclipper-windows` (exe, zip, msix) kept 7 days, and `ubiclipper-logs` (screenshots, build/install/test logs) kept 3 days. They used to be one artifact kept GitHub's default 90 days.
+- `handoff.md`: new key decision, known issue, next step and delete-artifacts command.
+- `models.yml` and `probe-nvidia.yml` unchanged (they upload no artifacts).
+
+### Why
+- The owner's GitHub Actions artifact storage was full: every build run kept around 3 large installer files for 90 days.
+- `paths-ignore` for Markdown commits was requested but not added: no workflow runs on branch pushes, path filters are ignored for tag pushes, and adding a branch trigger would cause more builds.
+
+### Unfinished / watch out
+- The owner deleted all old artifacts on 2026-10-15. Storage usage updates every 6–12 hours, so the first new upload may still fail if run too soon.
+- Even the newest artifact expires after 7 days. The `.msix` lives only in artifacts, so rerun `build.yml` before the Store upload if it has expired.
+- The new upload steps haven't run on GitHub yet; check the next run shows both artifacts.
+
 ## 2026-10-12 – Installer, website, GPU on any graphics card (v1.7 → v1.9.0)
 
 ### What we changed

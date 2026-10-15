@@ -1,6 +1,6 @@
 # UbiClipper: handoff document
 
-State as of **12 October 2026, version 1.9.0**. Keep this file updated at the end of every chat; the newest changes are summarised at the top of `changelog.md`. Written for a new chat that has no access to the previous conversation.
+State as of **15 October 2026, version 1.9.0**. Keep this file updated at the end of every chat; the newest changes are summarised at the top of `changelog.md`. Written for a new chat that has no access to the previous conversation.
 
 ## Quick facts
 
@@ -242,7 +242,7 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
 | `packaging/models/export_whisper_onnx.py`, `test_whisper_onnx.py` | Export Whisper turbo to ONNX fp16 (fixed 448-slot KV cache, `beam` gather input, alignment-head `qk` output), and test against faster-whisper |
 | `packaging/test_gpu_download.py`, `probe_nvidia.py`, `probe_redist.py` | CI checks of NVIDIA downloads and signatures |
 | `packaging/release_notes.md` | Body text for GitHub releases |
-| `.github/workflows/build.yml` | Builds on every manual run; `release=true` publishes `v<version>`. Also installs, starts, screenshots and uninstalls; test-signs and installs the MSIX; pushes screenshots to the `ci-shots` branch. |
+| `.github/workflows/build.yml` | Builds on every manual run; `release=true` publishes `v<version>`. Also installs, starts, screenshots and uninstalls; test-signs and installs the MSIX; pushes screenshots to the `ci-shots` branch. Uploads two artifacts: `ubiclipper-windows` (exe, zip, msix; kept 7 days) and `ubiclipper-logs` (screenshots and logs; kept 3 days). |
 | `.github/workflows/models.yml` | Exports and tests the DirectML model; `publish=true` attaches it to a release |
 | `.github/workflows/probe-nvidia.yml` | One-off NVIDIA signature probe |
 | `README.md`, `THIRD_PARTY.md`, `LICENSE` | README includes a "Code signing policy" section for SignPath; `LICENSE` is GPL-3.0 |
@@ -280,6 +280,13 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
 - Tags can't be pushed from the Claude session (proxy 403), so releases are made by `build.yml` with `release=true`, which creates the tag.
 - The Claude session also can't edit releases, set repo variables, read Actions logs or download artifacts.
 - CI reports errors as **annotations**, readable through `gh api .../check-runs/<job>/annotations`. Screenshots and the test log go to the **`ci-shots` branch**.
+
+**CI artifacts expire fast** (15 Oct 2026). The owner's Actions artifact storage filled up because every `build.yml` run kept its exe, zip and msix for GitHub's default 90 days.
+- Now: installers kept **7 days** (long enough to test on the owner's PC and to download the `.msix` for the Store; rerun the workflow for a fresh copy), logs and screenshots **3 days** (screenshots and `test.log` are also on `ci-shots`).
+- Artifacts are throwaway copies of each run's output. Release assets (exe, zip) are separate, never expire and don't count toward Actions storage, so deleting all artifacts is safe.
+- GitHub keeps no minimum: even the newest artifact expires after its retention.
+- Rejected: `paths-ignore` for Markdown-only commits. No workflow runs on branch pushes (`build.yml`: manual runs and `v*` tags; the other two: manual only), path filters aren't evaluated for tag pushes, and adding a branch trigger would start *more* builds.
+- Not done (owner decided deleting all old artifacts is fine): an automatic "keep the 2 newest artifacts" cleanup step, and attaching the `.msix` to releases.
 
 **NVIDIA CUDA under Smart App Control.**
 - NVIDIA ships **no signed cuBLAS or cudart for Windows**. This was checked for every recent version, both pip wheels and the developer.download.nvidia.com redist archives.
@@ -408,6 +415,8 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
 
 **Release body text.** The v1.8.1 and v1.9.0 releases show stale notes, and the Claude session can't edit releases. `packaging/release_notes.md` is now generic.
 
+**Actions artifact storage was full** (15 Oct 2026). The owner deleted all old artifacts the same day. GitHub recalculates storage usage every 6–12 hours, so the next `build.yml` upload may still fail if run too soon; if so, wait and rerun. Shorter retention applies only to new artifacts; if storage fills up again, delete them by hand (command in Setup and running). The `.msix` exists only as an artifact (releases attach only exe and zip), so it disappears after 7 days.
+
 **GPL and FFmpeg.** The bundled FFmpeg is a GPL build; the app is GPL-3.0, so they're compatible. `THIRD_PARTY.md` lists the parts.
 
 **Turkish glyphs** looked broken only in the Linux test environment's screenshots (missing fonts). Not a bug on Windows.
@@ -428,7 +437,7 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
 2. **Microsoft Store submission.** The owner creates the Partner Center individual account (free) and reserves "UbiClipper". The next chat:
    1. writes `packaging/msix/store_identity.json` with `Name`, `Publisher`, `PublisherDisplayName` from Partner Center → Product identity,
    2. reruns `build.yml`.
-   The owner then uploads the `.msix` from the Actions artifact, using the texts in `packaging/store_listing.md` plus 2–3 real screenshots.
+   The owner then uploads the `.msix` from the Actions artifact (kept only 7 days; rerun `build.yml` if it has expired), using the texts in `packaging/store_listing.md` plus 2–3 real screenshots.
 3. **SignPath Foundation application** (owner applies at signpath.org/apply: repo URL, GPL-3.0, GitHub Actions). If accepted:
    - add SignPath signing steps to `build.yml` (Setup.exe and uninstaller),
    - change the README "Code signing policy" from "application in progress" to final.
@@ -527,6 +536,7 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
 | DirectML model | `gh workflow run models.yml ... [-f publish=true -f tag=model-whisper-turbo-onnx-N]` (bump `MODEL_TAG` in `clipper/whisper_onnx.py` if the tag changes) |
 | Read CI results | `gh api repos/uberbora/UbiClipper/check-runs/<job_id>/annotations` (logs and artifacts aren't downloadable from the session) |
 | CI screenshots | `git fetch origin ci-shots` |
+| Delete all Actions artifacts (owner's PC, after `gh auth login`) | `gh api repos/uberbora/UbiClipper/actions/artifacts --paginate -q '.artifacts[].id' \| ForEach-Object { gh api -X DELETE repos/uberbora/UbiClipper/actions/artifacts/$_ }` (PowerShell) |
 | Local Windows build | `powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1` (python.org 3.12 and Inno Setup 6 needed; Windows SDK for the MSIX; `-NoInstaller`/`-NoMsix` to skip) |
 
 ### Configuration and keys
@@ -557,3 +567,4 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
   - CPU: 4+ cores.
   - Graphics card, optional: DirectX 12 with 4 GB VRAM; 6 GB+ for the AI judge on NVIDIA.
 - Whether to keep the `ci-shots` branch public (it holds CI screenshots only).
+- Whether to attach the `.msix` to releases too, so it doesn't vanish with the 7-day artifacts.
