@@ -383,6 +383,7 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
 - AI judge on DirectML (planned next).
 - Auto-updates, first-run wizard, bug-report button, licence/privacy note inside the app.
 - Support/donation buttons (discussed, waiting on the owner's links).
+- Reopen a past link: pick an already downloaded VOD/clip from the Storage cache and continue where you left off (added to the roadmap 16 Oct 2026). Needs a small info file per link folder (link, title, date), since folders are only named `site_id`, and saved analysis results, which aren't stored today.
 - Watch my channel, batch mode, scheduled posting, stats.
 - Webcam reaction detection, auto-find the webcam, smart zoom, sound effects.
 - More interface languages beyond Turkish/English.
@@ -457,6 +458,7 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
    - bug-report button
    - licence/privacy note in the app
 7. Later phases, in roadmap order:
+   - **Everyday editing:** reopen a past link from the download cache (size M; S if it only reuses the audio and re-analyses).
    - **Hands-off workflow:** watch my channel, batch mode, scheduled posting, stats.
    - **Smarter clips:** webcam reactions, auto-find webcam, smart zoom, sound effects.
    - **Reach:** more UI languages: ES, PT, DE.

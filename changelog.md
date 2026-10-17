@@ -2,6 +2,18 @@
 
 Newest first. One entry per working session. Full project state: `handoff.md`.
 
+## 2026-10-16 – Roadmap: reopen a past link
+
+### What we changed
+- `roadmap.html`: new Planned item "Reopen a past link" (size M) in the Everyday editing phase.
+- `handoff.md`: added it to Not started and to the later-phases list in Next steps.
+
+### Why
+- Settings → Storage already keeps downloaded link audio and clip pieces. The owner wants to pick one of those from a list and continue where they left off instead of pasting the link again.
+
+### Unfinished / watch out
+- Not built. Link folders are named only `site_id` and hold no link, title or date, so an info file must be written on first open. Analysis results (found moments) aren't saved at all yet; restoring them is the bigger part.
+
 ## 2026-10-15 – Shorter CI artifact retention
 
 ### What we changed
