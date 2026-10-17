@@ -2,6 +2,18 @@
 
 Newest first. One entry per working session. Full project state: `handoff.md`.
 
+## 2026-10-17 – Roadmap copy in project Context
+
+### What we changed
+- `handoff.md`: new convention: the project Context's "UbiClipper Roadmap.html" doc is a copy of `roadmap.html` and is replaced with the committed file at every wrap-up where the roadmap changed.
+- Outside the repo: the project doc was refreshed to match `roadmap.html` (it was missing "Reopen a past link"), and the owner added the refresh as a step in the end-of-chat routine.
+
+### Why
+- The owner uploaded the roadmap as a project doc, but it doesn't follow the GitHub sync, so it had already drifted from the repo. Keeping and refreshing it was chosen over deleting it.
+
+### Unfinished / watch out
+- No code changes this session. "Reopen a past link" is still only on the roadmap.
+
 ## 2026-10-16 – Roadmap: reopen a past link
 
 ### What we changed

@@ -479,6 +479,7 @@ The GPU paths run a short warm-up transcription, and any CUDA or DirectML error 
 - Now: push to GitHub and release through `build.yml` with `release=true`.
 - Bump `clipper/__init__.py` `__version__` for each release.
 - Update the roadmap (artifact source plus the bundled `roadmap.html`) whenever something ships.
+- `roadmap.html` in the repo is the source of truth for the roadmap. The project Context also holds a copy as the doc "UbiClipper Roadmap.html" (set up 17 Oct 2026). Whenever `roadmap.html` changes, replace that doc with the committed file at wrap-up so the two stay identical (owner's choice over deleting the copy).
 
 **Git**
 - Commit as `Claude <noreply@anthropic.com>`; a stop hook flags other identities.
